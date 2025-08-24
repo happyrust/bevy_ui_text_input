@@ -27,7 +27,7 @@ struct NoteShadow;
 #[derive(Component)]
 struct NoteContainer;
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
     commands.spawn(Camera2d);
 
@@ -48,8 +48,9 @@ fn setup(mut commands: Commands) {
         .with_children(|parent| {
             // Title
             parent.spawn((
-                Text::new("📝 Sticky Notes"),
+                Text::new("📝 便笺纸 - Sticky Notes"),
                 TextFont {
+                    font: asset_server.load("fonts/Songti.ttc"),
                     font_size: 36.0,
                     ..default()
                 },
@@ -79,10 +80,10 @@ fn setup(mut commands: Commands) {
                 .with_children(|parent| {
                     // Define sticky notes data
                     let notes = [
-                        (Color::srgb(1.0, 0.925, 0.675), "Type your ideas here...\n\nThis is a sticky note with VeloNode styling!", -0.02),
-                        (Color::srgb(0.678, 0.847, 0.902), "Another note with different color...\n\n✨ Supports emojis!", 0.015),
-                        (Color::srgb(0.596, 0.984, 0.596), "Tasks:\n• Build amazing apps\n• Learn Bevy\n• Have fun!", -0.01),
-                        (Color::srgb(1.0, 0.753, 0.796), "Important reminder:\n\nDon't forget to save your work!", 0.025),
+                        (Color::srgb(1.0, 0.925, 0.675), "在这里写下你的想法...\n\n这是一个便笺纸！", -0.02),
+                        (Color::srgb(0.678, 0.847, 0.902), "支持中文输入！\n\n✨ 也支持表情符号！", 0.015),
+                        (Color::srgb(0.596, 0.984, 0.596), "待办事项:\n• 构建优秀的应用\n• 学习 Bevy\n• 享受编程乐趣!", -0.01),
+                        (Color::srgb(1.0, 0.753, 0.796), "重要提醒:\n\n记得保存你的工作！", 0.025),
                     ];
 
                     // Create each sticky note
@@ -143,13 +144,14 @@ fn setup(mut commands: Commands) {
                                                 selected_text_color: None,
                                                 ..default()
                                             },
-                                            TextInputPrompt::new("Write something..."),
+                                            TextInputPrompt::new("写点什么..."),
                                             Node {
                                                 width: Val::Percent(100.0),
                                                 height: Val::Percent(100.0),
                                                 ..default()
                                             },
                                             TextFont {
+                                                font: asset_server.load("fonts/Songti.ttc"),
                                                 font_size: 16.0,
                                                 ..default()
                                             },

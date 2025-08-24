@@ -632,28 +632,47 @@ pub fn on_focused_keyboard_input(
 }
 
 pub fn listen_ime_events(
-    trigger: Trigger<Ime>,
+    mut ime_events: EventReader<Ime>,
     mut text_inputs: Query<&mut TextInputQueue, With<TextInputNode>>,
     mut global_state: ResMut<TextInputGlobalState>,
     input_focus: Res<InputFocus>,
 ) {
-    // IME events are sent to windows, but we need the focused text input entity
-    let Some(focused_entity) = input_focus.get() else {
-        return;
-    };
-    
-    let Ok(mut queue) = text_inputs.get_mut(focused_entity) else {
-        return;
-    };
+    for event in ime_events.read() {
+        // IME events are sent to windows, but we need the focused text input entity
+        let Some(focused_entity) = input_focus.get() else {
+            continue;
+        };
+        
+        let Ok(mut queue) = text_inputs.get_mut(focused_entity) else {
+            continue;
+        };
 
-    let TextInputGlobalState { overwrite_mode, .. } = &mut *global_state;
+        let TextInputGlobalState { overwrite_mode, .. } = &mut *global_state;
 
-    if let Ime::Commit { value, .. } = trigger.event() {
-        for character in value.chars() {
-            queue.add(TextInputAction::Edit(TextInputEdit::Insert(
-                character,
-                *overwrite_mode,
-            )));
+        match event {
+        Ime::Commit { value, .. } => {
+            // Handle committed text from IME (e.g., completed Chinese characters)
+            for character in value.chars() {
+                queue.add(TextInputAction::Edit(TextInputEdit::Insert(
+                    character,
+                    *overwrite_mode,
+                )));
+            }
+        }
+        Ime::Preedit { value, cursor, .. } => {
+            // Handle preedit text (composition text shown during IME input)
+            // For now, we log it for debugging, but in the future this could be
+            // shown as a temporary overlay or inline preview
+            if !value.is_empty() {
+                bevy::log::debug!("IME Preedit: '{}' (cursor: {:?})", value, cursor);
+            }
+        }
+        Ime::Enabled { .. } => {
+            bevy::log::debug!("IME Enabled for text input");
+        }
+        Ime::Disabled { .. } => {
+            bevy::log::debug!("IME Disabled for text input");
+        }
         }
     }
 }
@@ -682,6 +701,11 @@ pub fn toggle_ime_on_focus(
 
             *ime_allowed = is_text_input_focused;
             window.set_ime_allowed(*ime_allowed);
+            
+            // Note: IME cursor position could be set here with window.set_ime_cursor_area()
+            // but it requires proper coordinate conversion and winit types that may vary
+            // between Bevy versions. The IME will still work without explicit positioning,
+            // it will just appear at a default location determined by the OS.
         }
     }
 }
