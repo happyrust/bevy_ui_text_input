@@ -37,7 +37,10 @@ fn main() {
     App::new()
         .add_plugins((DefaultPlugins, TextInputPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (font_button_system, submit_system, button_interaction))
+        .add_systems(
+            Update,
+            (font_button_system, submit_system, button_interaction),
+        )
         .run();
 }
 
@@ -117,7 +120,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             Button,
             BackgroundColor(DARK_BLUE.into()),
             BorderColor(WHITE.into()),
-            FontSwitchButton { font_type: FontType::Songti },
+            FontSwitchButton {
+                font_type: FontType::Songti,
+            },
         ))
         .with_child((
             Text::new("宋体 Songti"),
@@ -141,7 +146,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             Button,
             BackgroundColor(DARK_BLUE.into()),
             BorderColor(WHITE.into()),
-            FontSwitchButton { font_type: FontType::Heiti },
+            FontSwitchButton {
+                font_type: FontType::Heiti,
+            },
         ))
         .with_child((
             Text::new("黑体 Heiti"),
@@ -153,7 +160,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             TextColor(WHITE.into()),
         ))
         .id();
-
 
     // 文本输入框
     let text_input = commands
@@ -214,11 +220,13 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             TextColor(WHITE.into()),
         ))
-        .observe(move |_: Trigger<Pointer<Click>>, mut query: Query<&mut TextInputQueue>| {
-            if let Ok(mut queue) = query.get_mut(text_input) {
-                queue.add(bevy_ui_text_input::actions::TextInputAction::Submit);
-            }
-        })
+        .observe(
+            move |_: Trigger<Pointer<Click>>, mut query: Query<&mut TextInputQueue>| {
+                if let Ok(mut queue) = query.get_mut(text_input) {
+                    queue.add(bevy_ui_text_input::actions::TextInputAction::Submit);
+                }
+            },
+        )
         .id();
 
     // 输出显示区域
@@ -247,7 +255,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .id();
 
     // 组装界面
-    commands.entity(button_container).add_children(&[songti_button, heiti_button]);
+    commands
+        .entity(button_container)
+        .add_children(&[songti_button, heiti_button]);
     commands.entity(root).add_children(&[
         title,
         instruction,
@@ -259,13 +269,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn font_button_system(
-    mut interaction_query: Query<(&Interaction, &FontSwitchButton), (Changed<Interaction>, With<Button>)>,
+    mut interaction_query: Query<
+        (&Interaction, &FontSwitchButton),
+        (Changed<Interaction>, With<Button>),
+    >,
     mut text_input_query: Query<&mut TextFont, With<TextInputEntity>>,
     fonts: Res<ChineseFonts>,
 ) {
     for (interaction, font_button) in &mut interaction_query {
         if *interaction == Interaction::Pressed {
-            if let Ok(mut text_font) = text_input_query.get_single_mut() {
+            if let Ok(mut text_font) = text_input_query.single_mut() {
                 match font_button.font_type {
                     FontType::Songti => text_font.font = fonts.songti.clone(),
                     FontType::Heiti => text_font.font = fonts.heiti.clone(),
@@ -278,7 +291,7 @@ fn font_button_system(
 fn button_interaction(
     mut interaction_query: Query<
         (&Interaction, &mut BackgroundColor, &mut BorderColor),
-        (Changed<Interaction>, With<Button>)
+        (Changed<Interaction>, With<Button>),
     >,
 ) {
     for (interaction, mut bg_color, mut border_color) in &mut interaction_query {

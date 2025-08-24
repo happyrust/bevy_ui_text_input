@@ -23,4 +23,4 @@ wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["Navigator", "Clipboard"] }
 wasm-bindgen-futures = "0.4"
 
-[workspace]
+# [workspace] # Commented out to be part of parent workspace
