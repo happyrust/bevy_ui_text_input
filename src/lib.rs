@@ -256,9 +256,7 @@ pub struct TextInputBuffer {
     pub(crate) cursor_blink_time: f32,
     pub(crate) needs_update: bool,
     pub(crate) prompt_buffer: Option<Buffer>,
-    pub(crate) changes: cosmic_undo_2::Commands<Change>,
 }
-
 impl TextInputBuffer {
     pub fn get_text(&self) -> String {
         self.editor.with_buffer(get_text)
@@ -273,7 +271,6 @@ impl Default for TextInputBuffer {
             cursor_blink_time: 0.,
             needs_update: true,
             prompt_buffer: None,
-            changes: cosmic_undo_2::Commands::default(),
         }
     }
 }

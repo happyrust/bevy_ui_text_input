@@ -42,7 +42,6 @@ use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerButton;
 use bevy::text::cosmic_text::Action;
 use bevy::text::cosmic_text::BorrowedWithFontSystem;
-use bevy::text::cosmic_text::Change;
 use bevy::text::cosmic_text::Edit;
 use bevy::text::cosmic_text::Editor;
 use bevy::text::cosmic_text::Motion;
@@ -53,22 +52,6 @@ use bevy::ui::ComputedNode;
 use bevy::window::Ime;
 use bevy::window::Window;
 use bevy::winit::WinitWindows;
-
-pub fn apply_action<'a>(
-    editor: &mut BorrowedWithFontSystem<Editor<'a>>,
-    action: cosmic_undo_2::Action<&Change>,
-) {
-    match action {
-        cosmic_undo_2::Action::Do(change) => {
-            editor.apply_change(change);
-        }
-        cosmic_undo_2::Action::Undo(change) => {
-            let mut reversed = change.clone();
-            reversed.reverse();
-            editor.apply_change(&reversed);
-        }
-    }
-}
 
 pub fn apply_motion<'a>(
     editor: &mut BorrowedWithFontSystem<Editor<'a>>,
@@ -563,7 +546,7 @@ pub fn process_text_input_queues(
 
     for (entity, node, mut buffer, mut actions_queue) in query.iter_mut() {
         let TextInputBuffer {
-            editor, changes, ..
+            editor, ..
         } = &mut *buffer;
         let mut editor = editor.borrow_with(&mut font_system);
         while let Some(action) = actions_queue.next() {
@@ -582,7 +565,6 @@ pub fn process_text_input_queues(
                         apply_text_input_edit(
                             TextInputEdit::Delete,
                             &mut editor,
-                            changes,
                             node.max_chars,
                             &node.filter,
                         );
@@ -602,7 +584,6 @@ pub fn process_text_input_queues(
                             apply_text_input_edit(
                                 TextInputEdit::Paste(text),
                                 &mut editor,
-                                changes,
                                 node.max_chars,
                                 &node.filter,
                             );
@@ -617,7 +598,6 @@ pub fn process_text_input_queues(
                     apply_text_input_edit(
                         text_input_edit,
                         &mut editor,
-                        changes,
                         node.max_chars,
                         &node.filter,
                     );
@@ -655,8 +635,14 @@ pub fn listen_ime_events(
     trigger: Trigger<Ime>,
     mut text_inputs: Query<&mut TextInputQueue, With<TextInputNode>>,
     mut global_state: ResMut<TextInputGlobalState>,
+    input_focus: Res<InputFocus>,
 ) {
-    let Ok(mut queue) = text_inputs.get_mut(trigger.target()) else {
+    // IME events are sent to windows, but we need the focused text input entity
+    let Some(focused_entity) = input_focus.get() else {
+        return;
+    };
+    
+    let Ok(mut queue) = text_inputs.get_mut(focused_entity) else {
         return;
     };
 

@@ -1,5 +1,12 @@
 ## Changelog
 
+### 0.6.0
+* Added full IME (Input Method Editor) support for inputting Chinese, Japanese, Korean and other languages that require composition.
+* Added `listen_ime_events` observer to handle IME commit events.
+* Added `toggle_ime_on_focus` system to automatically enable/disable IME when text input gains/loses focus.
+* Added Chinese input examples (`chinese_input.rs`, `chinese_debug.rs`, `ime_test.rs`, `ime_window_test.rs`) demonstrating IME functionality.
+* Fixed incorrect mapping of `TextInputEdit::Unindent` to `Action::Indent`.
+
 ### 0.5.2
 * Fixed cargo description text.
 
