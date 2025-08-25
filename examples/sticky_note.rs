@@ -29,7 +29,7 @@ struct NoteContainer;
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
-    commands.spawn(Camera2d);
+    commands.spawn(Camera2d::default());
 
     // Create a canvas-like background with grid
     commands
@@ -112,7 +112,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                         ..default()
                                     },
                                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.2)),
-                                    BorderColor(Color::NONE),
+                                    BorderColor::all(Color::NONE),
                                     BorderRadius::all(Val::Px(2.0)),
                                     NoteShadow,
                                 ));
@@ -130,7 +130,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                             ..default()
                                         },
                                         BackgroundColor(*bg_color),
-                                        BorderColor(Color::srgba(0.0, 0.0, 0.0, 0.1)),
+                                        BorderColor::all(Color::srgba(0.0, 0.0, 0.0, 0.1)),
                                         BorderRadius::all(Val::Px(2.0)),
                                     ))
                                     .with_children(|content_parent| {
@@ -173,7 +173,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                                     ..default()
                                                 },
                                                 BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
-                                                BorderColor(Color::srgb(0.6, 0.1, 0.1)),
+                                                BorderColor::all(Color::srgb(0.6, 0.1, 0.1)),
                                                 BorderRadius::all(Val::Percent(50.0)),
                                             ))
                                             .with_children(|pin_parent| {

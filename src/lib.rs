@@ -8,11 +8,12 @@ use std::collections::VecDeque;
 
 use actions::TextInputAction;
 use bevy::app::{Plugin, PostUpdate};
-use bevy::asset::AssetEvents;
+use bevy::asset::AssetEventSystems;
 use bevy::color::Color;
 use bevy::color::palettes::css::SKY_BLUE;
 use bevy::color::palettes::tailwind::GRAY_400;
-use bevy::ecs::component::{Component, HookContext};
+use bevy::ecs::component::Component;
+use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::Event;
 use bevy::ecs::observer::Observer;
@@ -26,10 +27,10 @@ use bevy::math::{Rect, Vec2};
 use bevy::prelude::ReflectComponent;
 use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::render::{ExtractSchedule, RenderApp};
-use bevy::text::cosmic_text::{Buffer, Edit, Editor, Metrics, Wrap};
+use cosmic_text::{Buffer, Edit, Editor, Metrics, Wrap};
 use bevy::text::{GlyphAtlasInfo, TextFont};
-use bevy::text::{JustifyText, TextColor};
-use bevy::ui::{Node, RenderUiSystem, UiSystem, extract_text_sections};
+use bevy::text::{Justify, TextColor};
+use bevy::ui::{Node, RenderUiSystems, UiSystems, extract_text_sections};
 use edit::{
     cursor_blink_system, listen_ime_events, mouse_wheel_scroll, on_drag_text_input,
     on_focused_keyboard_input, on_move_clear_multi_click, on_multi_click_set_selection,
@@ -55,7 +56,7 @@ impl Plugin for TextInputPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    remove_dropped_font_atlas_sets_from_text_input_pipeline.before(AssetEvents),
+                    remove_dropped_font_atlas_sets_from_text_input_pipeline.before(AssetEventSystems),
                     (
                         toggle_ime_on_focus,
                         listen_ime_events,
@@ -67,7 +68,7 @@ impl Plugin for TextInputPlugin {
                         text_input_prompt_system,
                     )
                         .chain()
-                        .in_set(UiSystem::PostLayout),
+                        .in_set(UiSystems::PostLayout),
                 ),
             );
 
@@ -79,7 +80,7 @@ impl Plugin for TextInputPlugin {
             ExtractSchedule,
             (extract_text_input_prompts, extract_text_input_nodes)
                 .chain()
-                .in_set(RenderUiSystem::ExtractText)
+                .in_set(RenderUiSystems::ExtractText)
                 .after(extract_text_sections),
         );
     }
@@ -118,7 +119,7 @@ pub struct TextInputNode {
     /// Deactivate after text submitted
     pub unfocus_on_submit: bool,
     /// Text justification
-    pub justification: JustifyText,
+    pub justification: Justify,
 }
 
 impl Default for TextInputNode {
@@ -132,7 +133,7 @@ impl Default for TextInputNode {
             is_enabled: true,
             focus_on_pointer_down: true,
             unfocus_on_submit: true,
-            justification: JustifyText::Left,
+            justification: Justify::Left,
         }
     }
 }

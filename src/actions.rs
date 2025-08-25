@@ -1,9 +1,9 @@
-use bevy::text::cosmic_text::Action;
-use bevy::text::cosmic_text::BorrowedWithFontSystem;
-use bevy::text::cosmic_text::Edit;
-use bevy::text::cosmic_text::Editor;
-use bevy::text::cosmic_text::Motion;
-use bevy::text::cosmic_text::Selection;
+use cosmic_text::Action;
+use cosmic_text::BorrowedWithFontSystem;
+use cosmic_text::Edit;
+use cosmic_text::Editor;
+use cosmic_text::Motion;
+use cosmic_text::Selection;
 
 use crate::TextInputFilter;
 use crate::clipboard::ClipboardRead;

@@ -28,11 +28,16 @@ use bevy::text::LineHeight;
 use bevy::text::TextBounds;
 use bevy::text::TextError;
 use bevy::text::TextFont;
-use bevy::text::YAxisOrientation;
-use bevy::text::cosmic_text;
-use bevy::text::cosmic_text::Buffer;
-use bevy::text::cosmic_text::Edit;
-use bevy::text::cosmic_text::Metrics;
+// YAxisOrientation is no longer available, we'll define our own
+#[derive(Clone, Copy)]
+enum YAxisOrientation {
+    TopToBottom,
+    BottomToTop,
+}
+use cosmic_text;
+use cosmic_text::Buffer;
+use cosmic_text::Edit;
+use cosmic_text::Metrics;
 use bevy::ui::ComputedNode;
 use std::sync::Arc;
 
@@ -170,7 +175,7 @@ pub fn text_input_system(
                     .metrics(metrics);
 
                 let text = crate::get_text(buffer);
-                buffer.set_text(font_system, &text, attrs, cosmic_text::Shaping::Advanced);
+                buffer.set_text(font_system, &text, &attrs, cosmic_text::Shaping::Advanced);
                 let align = Some(input.justification.into());
                 for buffer_line in buffer.lines.iter_mut() {
                     buffer_line.set_align(align);
@@ -420,7 +425,7 @@ pub fn text_input_prompt_system(
             buffer.set_text(
                 font_system,
                 &prompt.text,
-                attrs,
+                &attrs,
                 cosmic_text::Shaping::Advanced,
             );
 
