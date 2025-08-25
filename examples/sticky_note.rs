@@ -16,7 +16,7 @@ fn main() {
         .add_plugins((DefaultPlugins, TextInputPlugin))
         .insert_resource(ClearColor(Color::srgb(0.95, 0.95, 0.95)))
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_submit, animate_shadow, handle_resize))
+        .add_systems(Update, (handle_submit, animate_shadow, handle_resize, handle_text_input_click))
         .run();
 }
 
@@ -238,6 +238,18 @@ fn handle_resize(
         for mut style in container_query.iter_mut() {
             // Adjust layout based on window size
             style.flex_wrap = FlexWrap::Wrap;
+        }
+    }
+}
+
+fn handle_text_input_click(
+    mut input_focus: ResMut<InputFocus>,
+    text_input_query: Query<(Entity, &Interaction), (With<TextInputNode>, Changed<Interaction>)>,
+) {
+    for (entity, interaction) in text_input_query.iter() {
+        if *interaction == Interaction::Pressed {
+            println!("点击了文本输入框: {:?}", entity);
+            input_focus.set(entity);
         }
     }
 }
