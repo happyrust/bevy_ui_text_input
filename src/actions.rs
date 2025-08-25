@@ -81,7 +81,7 @@ pub fn apply_text_input_edit(
     edit: TextInputEdit,
     editor: &mut BorrowedWithFontSystem<'_, Editor<'static>>,
     max_chars: Option<usize>,
-    filter_mode: &Option<TextInputFilter>,
+    _filter_mode: &Option<TextInputFilter>,
 ) {
     match edit {
         TextInputEdit::Motion(motion, with_select) => {

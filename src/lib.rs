@@ -26,7 +26,7 @@ use bevy::math::{Rect, Vec2};
 use bevy::prelude::ReflectComponent;
 use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::render::{ExtractSchedule, RenderApp};
-use bevy::text::cosmic_text::{Buffer, Change, Edit, Editor, Metrics, Wrap};
+use bevy::text::cosmic_text::{Buffer, Edit, Editor, Metrics, Wrap};
 use bevy::text::{GlyphAtlasInfo, TextFont};
 use bevy::text::{JustifyText, TextColor};
 use bevy::ui::{Node, RenderUiSystem, UiSystem, extract_text_sections};
@@ -204,32 +204,7 @@ impl TextInputFilter {
         }
     }
 
-    fn is_match_char(&self, ch: char) -> bool {
-        match self {
-            TextInputFilter::Integer => {
-                // Allow only numeric characters
-                ch.is_ascii_digit() || ch == '-'
-            }
-            TextInputFilter::Hex => {
-                // Allow hexadecimal characters (0-9, a-f, A-F)
-                ch.is_ascii_hexdigit()
-            }
-            TextInputFilter::Decimal => {
-                // Allow numeric characters and a single decimal point
-                ch.is_ascii_digit() || ch == '.' || ch == '-'
-            }
-        }
-    }
 
-    fn is_match(self, text: &str) -> bool {
-        if let Some(regex) = self.regex() {
-            // If a regex is defined, use it to validate the entire text
-            regex.is_match(text)
-        } else {
-            // Otherwise, check each character against the filter
-            text.chars().all(|ch| self.is_match_char(ch))
-        }
-    }
 }
 
 impl Default for TextInputMode {
