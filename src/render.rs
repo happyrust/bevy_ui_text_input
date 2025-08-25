@@ -232,7 +232,7 @@ pub fn extract_text_input_nodes(
 
             extracted_uinodes.uinodes.push(ExtractedUiNode {
                 stack_index: uinode.stack_index(),
-                color,
+                color: style.cursor_color.to_linear(),
                 image: AssetId::default(),
                 clip,
                 extracted_camera_entity,
