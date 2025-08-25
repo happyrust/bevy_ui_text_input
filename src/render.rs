@@ -156,13 +156,13 @@ pub fn extract_text_input_nodes(
 
         let cursor_visable = is_active && is_enabled && blink_visible && color_visible;
 
-        // Debug logging for active text inputs
-        if is_active {
-            bevy::log::info!(
-                "Entity {:?}: active={}, enabled={}, blink_visible={} (time={:.3}, interval={:.3}), color_visible={}, final={}",
-                entity, is_active, is_enabled, blink_visible, input_buffer.cursor_blink_time, style.blink_interval, color_visible, cursor_visable
-            );
-        }
+        // Debug logging for active text inputs (commented out to reduce noise)
+        // if is_active {
+        //     bevy::log::info!(
+        //         "Entity {:?}: active={}, enabled={}, blink_visible={} (time={:.3}, interval={:.3}), color_visible={}, final={}",
+        //         entity, is_active, is_enabled, blink_visible, input_buffer.cursor_blink_time, style.blink_interval, color_visible, cursor_visable
+        //     );
+        // }
 
         let cursor_position = input_buffer
             .editor
@@ -272,10 +272,15 @@ pub fn extract_text_input_prompts(
 ) {
     let mut camera_mapper = camera_map.get_mapper();
 
-    bevy::log::info!("extract_text_input_prompts: start manual extraction");
+    bevy::log::trace!("extract_text_input_prompts: start manual extraction");
 
     let prompt_count = prompt_query.iter().count();
-    bevy::log::info!("extract_text_input_prompts: found {} prompt entities", prompt_count);
+    bevy::log::trace!("extract_text_input_prompts: found {} prompt entities", prompt_count);
+
+    // 如果没有任何文字输入提示实体，直接返回，避免不必要的处理
+    if prompt_count == 0 {
+        return;
+    }
 
     let mut start = extracted_uinodes.glyphs.len();
 
@@ -335,12 +340,12 @@ pub fn extract_text_input_prompts(
 
         let color = prompt.color.unwrap_or(text_color.0).to_linear();
 
-        bevy::log::info!(
-            "prompt extract: entity={:?}, glyphs_len={}, size={:?}",
-            entity,
-            text_layout_info.glyphs.len(),
-            uinode.size()
-        );
+        // bevy::log::info!(
+        //     "prompt extract: entity={:?}, glyphs_len={}, size={:?}",
+        //     entity,
+        //     text_layout_info.glyphs.len(),
+        //     uinode.size()
+        // );
 
         // UI 使用 2D 变换，不需要 3D 变换
         let ui_transform = **ui_global_transform;
