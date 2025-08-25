@@ -17,17 +17,17 @@ use bevy::ecs::system::Res;
 use bevy::ecs::system::ResMut;
 use bevy::image::TextureAtlasLayout;
 use bevy::input_focus::InputFocus;
-use bevy::math::{Affine2, Mat4};
+
 use bevy::math::Rect;
 use bevy::math::Vec2;
-use bevy::math::Vec3;
+
 use bevy::render::Extract;
 use bevy::render::sync_world::TemporaryRenderEntity;
 use bevy::render::view::InheritedVisibility;
 use bevy::sprite::BorderRect;
 use bevy::text::TextColor;
 use cosmic_text::Edit;
-use bevy::transform::components::GlobalTransform;
+
 use bevy::ui::CalculatedClip;
 use bevy::ui::ComputedNode;
 use bevy::ui::ComputedNodeTarget;
@@ -50,7 +50,7 @@ pub fn extract_text_input_nodes(
         Query<(
             Entity,
             &ComputedNode,
-            &GlobalTransform,
+            &UiGlobalTransform,
             &InheritedVisibility,
             Option<&CalculatedClip>,
             &ComputedNodeTarget,
@@ -71,7 +71,7 @@ pub fn extract_text_input_nodes(
     for (
         entity,
         uinode,
-        global_transform,
+        ui_global_transform,
         inherited_visibility,
         clip,
         target,
@@ -101,12 +101,13 @@ pub fn extract_text_input_nodes(
             .editor
             .with_buffer(|buffer| Vec2::new(buffer.scroll().horizontal, 0.)); // buffer.scroll().vertical));
 
-        let transform = global_transform.affine()
-            * bevy::math::Affine3A::from_translation((-0.5 * uinode.size() - scroll).extend(0.));
+        // UI 使用 2D 变换
+        let ui_transform = **ui_global_transform;
+        let transform = ui_transform * bevy::math::Affine2::from_translation(-0.5 * uinode.size() - scroll);
 
         let node_rect = Rect::from_center_size(
-            global_transform.translation().truncate(),
-            uinode.size() * global_transform.scale().truncate(),
+            ui_transform.translation,
+            uinode.size(),
         );
 
         let clip = Some(
@@ -141,14 +142,7 @@ pub fn extract_text_input_nodes(
                     border_radius: ResolvedBorderRadius::ZERO,
                     border: BorderRect::ZERO,
                     node_type: NodeType::Rect,
-                    transform: {
-                        let mat = transform * Mat4::from_translation(rect.center().extend(0.));
-                        Affine2::from_cols(
-                            mat.x_axis.truncate().truncate(),
-                            mat.y_axis.truncate().truncate(),
-                            mat.w_axis.truncate().truncate()
-                        )
-                    },
+                    transform: transform * bevy::math::Affine2::from_translation(rect.center()),
                 },
                 main_entity: entity.into(),
                 render_entity: commands.spawn(TemporaryRenderEntity).id(),
@@ -206,14 +200,7 @@ pub fn extract_text_input_nodes(
             };
 
             extracted_uinodes.glyphs.push(ExtractedGlyph {
-                transform: {
-                    let mat = transform * Mat4::from_translation(position.extend(0.));
-                    Affine2::from_cols(
-                        mat.x_axis.truncate().truncate(),
-                        mat.y_axis.truncate().truncate(),
-                        mat.w_axis.truncate().truncate()
-                    )
-                },
+                transform: transform * bevy::math::Affine2::from_translation(*position),
                 rect,
             });
 
@@ -259,18 +246,10 @@ pub fn extract_text_input_nodes(
                     border_radius: ResolvedBorderRadius::ZERO,
                     border: BorderRect::ZERO,
                     node_type: NodeType::Rect,
-                    transform: {
-                        let mat = transform * Mat4::from_translation(Vec3::new(
-                            x + 0.5 * width,
-                            y + 0.5 * line_height,
-                            0.,
-                        ));
-                        Affine2::from_cols(
-                            mat.x_axis.truncate().truncate(),
-                            mat.y_axis.truncate().truncate(),
-                            mat.w_axis.truncate().truncate()
-                        )
-                    },
+                    transform: transform * bevy::math::Affine2::from_translation(Vec2::new(
+                        x + 0.5 * width,
+                        y + 0.5 * line_height,
+                    )),
                 },
                 main_entity: entity.into(),
                 render_entity: commands.spawn(TemporaryRenderEntity).id(),

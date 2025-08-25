@@ -258,7 +258,7 @@ impl Default for TextInputBuffer {
 /// Optional component.
 #[derive(Component, Clone, Debug, Reflect)]
 #[reflect(Component, Default, Debug)]
-#[require(TextInputPromptLayoutInfo)]
+#[require(TextInputPromptLayoutInfo, SyncToRenderWorld)]
 pub struct TextInputPrompt {
     /// Prompt's text
     pub text: String,
