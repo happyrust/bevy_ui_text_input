@@ -8,6 +8,8 @@ use bevy_ui_text_input::{
     TextInputBuffer, TextInputNode, TextInputPlugin, TextInputPrompt, TextInputStyle,
     TextSubmitEvent,
 };
+use bevy::input_focus::InputFocus;
+use bevy::ui::{Interaction, FocusPolicy};
 
 fn main() {
     App::new()
@@ -27,7 +29,7 @@ struct NoteShadow;
 #[derive(Component)]
 struct NoteContainer;
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut input_focus: ResMut<InputFocus>) {
     // Camera
     commands.spawn(Camera2d::default());
 
@@ -89,6 +91,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                     ];
 
                     // Create each sticky note
+                    let mut first_input_entity = None;
                     for (bg_color, _text, rotation) in notes.iter() {
                         parent
                             .spawn((
@@ -137,7 +140,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                     ))
                                     .with_children(|content_parent| {
                                         // Text input area
-                                        content_parent.spawn((
+                                        let input_entity = content_parent.spawn((
                                             TextInputNode::default(),
                                             TextInputBuffer::default(),
                                             TextInputStyle {
@@ -159,7 +162,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                             },
                                             TextColor(Color::srgb(0.1, 0.1, 0.1)),
                                             BackgroundColor(Color::NONE),
-                                        ));
+                                            // 添加 UI 交互组件
+                                            Interaction::default(),
+                                            FocusPolicy::Block,
+                                        )).id();
+
+                                        // 保存第一个文本输入实体
+                                        if first_input_entity.is_none() {
+                                            first_input_entity = Some(input_entity);
+                                        }
                                         
                                         // Small decorative element (like a pin)
                                         content_parent
@@ -195,6 +206,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                             });
                                     });
                             });
+                    }
+
+                    // 设置第一个文本输入为活动输入
+                    if let Some(entity) = first_input_entity {
+                        input_focus.set(entity);
                     }
                 });
         });

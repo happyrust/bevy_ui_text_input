@@ -31,6 +31,7 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input::mouse::MouseWheel;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::InputFocus;
+use bevy::log::info;
 // warn is no longer needed in Bevy 0.16
 use bevy::math::Rect;
 use bevy::picking::events::Click;
@@ -614,7 +615,11 @@ pub fn on_focused_keyboard_input(
     mut query: Query<(&TextInputNode, &mut TextInputQueue)>,
     mut global_state: ResMut<TextInputGlobalState>,
 ) {
-    let Some(target_entity) = trigger.target() else { return; };
+    let Some(target_entity) = trigger.target() else {
+        info!("on_focused_keyboard_input: no target entity");
+        return;
+    };
+    info!("on_focused_keyboard_input: target_entity={:?}, input={:?}", target_entity, trigger.event().input);
     if let Ok((input, mut queue)) = query.get_mut(target_entity) {
         let TextInputGlobalState {
             shift,
