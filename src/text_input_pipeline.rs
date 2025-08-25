@@ -361,6 +361,7 @@ pub fn text_input_prompt_system(
             layout_info.glyphs.clear();
 
             if prompt.text.is_empty() {
+                bevy::log::warn!("prompt.layout: empty prompt text, skip");
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -371,6 +372,7 @@ pub fn text_input_prompt_system(
                 ..
             } = &mut *text_input_pipeline;
             if !fonts.contains(text_font.font.id()) {
+                bevy::log::warn!("prompt.layout: font not yet loaded, skip");
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -386,6 +388,10 @@ pub fn text_input_prompt_system(
                 .scale(node.inverse_scale_factor().recip());
 
             if metrics.font_size <= 0. || metrics.line_height <= 0. {
+                bevy::log::warn!(
+                    "prompt.layout: invalid metrics (font_size={:.3}, line_height={:.3}), skip",
+                    metrics.font_size, metrics.line_height
+                );
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -433,6 +439,11 @@ pub fn text_input_prompt_system(
             for buffer_line in buffer.lines.iter_mut() {
                 buffer_line.set_align(align);
             }
+
+            bevy::log::info!(
+                "prompt.layout: node_size={:?}, font_size={:.1}, line_height={:.1}, justification={:?}",
+                node.size(), font.font_size, line_height, input.justification
+            );
 
             buffer.shape_until_scroll(font_system, false);
 

@@ -1,7 +1,7 @@
 //! Debug IME commit issues
 use bevy::prelude::*;
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue, 
+    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue,
     TextInputStyle, actions::TextInputAction, actions::TextInputEdit,
 };
 
@@ -15,7 +15,7 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    
+
     // Text input
     commands.spawn((
         TextInputNode::default(),
@@ -37,10 +37,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
         BackgroundColor(Color::srgb(0.1, 0.1, 0.3)),
-        BorderColor(Color::WHITE),
+        BorderColor::all(Color::WHITE),
         TextInputStyle::default(),
     ));
-    
+
     // Instructions
     commands.spawn((
         Text::new("Type Chinese characters and check console for debug info"),
@@ -70,7 +70,7 @@ fn ime_debug_system(
             bevy::window::Ime::Commit { value, .. } => {
                 info!("✅ IME Commit: '{}'", value);
                 info!("  Characters: {:?}", value.chars().collect::<Vec<_>>());
-                
+
                 // Manual insertion for debugging
                 if let Some(entity) = input_focus.get() {
                     if let Ok(mut queue) = text_inputs.get_mut(entity) {

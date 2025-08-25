@@ -27,6 +27,7 @@ use bevy::math::{Rect, Vec2};
 use bevy::prelude::ReflectComponent;
 use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::render::{ExtractSchedule, RenderApp};
+use bevy::render::sync_world::SyncToRenderWorld;
 use cosmic_text::{Buffer, Edit, Editor, Metrics, Wrap};
 use bevy::text::{GlyphAtlasInfo, TextFont};
 use bevy::text::{Justify, TextColor};
@@ -81,7 +82,8 @@ impl Plugin for TextInputPlugin {
             (extract_text_input_prompts, extract_text_input_nodes)
                 .chain()
                 .in_set(RenderUiSystems::ExtractText)
-                .after(extract_text_sections),
+                .after(extract_text_sections)
+                .after(RenderUiSystems::ExtractBackgrounds), // 确保在背景提取之后运行
         );
     }
 }
@@ -94,7 +96,8 @@ impl Plugin for TextInputPlugin {
     TextInputLayoutInfo,
     TextInputStyle,
     TextColor,
-    TextInputQueue
+    TextInputQueue,
+    SyncToRenderWorld
 )]
 #[component(
     on_add = on_add_textinputnode,
@@ -225,7 +228,7 @@ impl TextInputMode {
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 pub struct TextInputBuffer {
     pub editor: Editor<'static>,
     pub(crate) selection_rects: Vec<Rect>,

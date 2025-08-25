@@ -38,6 +38,8 @@ use bevy::ui::ExtractedUiNodes;
 use bevy::ui::NodeType;
 use bevy::ui::ResolvedBorderRadius;
 use bevy::ui::UiCameraMap;
+use bevy::ui::UiGlobalTransform;
+
 
 pub fn extract_text_input_nodes(
     mut commands: Commands,
@@ -153,10 +155,20 @@ pub fn extract_text_input_nodes(
             });
         }
 
-        let cursor_visable = active_text_input.0.is_some_and(|active| active == entity)
-            && input.is_enabled
-            && input_buffer.cursor_blink_time < style.blink_interval
-            && !style.cursor_color.is_fully_transparent();
+        let is_active = active_text_input.0.is_some_and(|active| active == entity);
+        let is_enabled = input.is_enabled;
+        let blink_visible = input_buffer.cursor_blink_time < style.blink_interval;
+        let color_visible = !style.cursor_color.is_fully_transparent();
+
+        let cursor_visable = is_active && is_enabled && blink_visible && color_visible;
+
+        // Debug logging for active text inputs
+        if is_active {
+            bevy::log::info!(
+                "Entity {:?}: active={}, enabled={}, blink_visible={} (time={:.3}, interval={:.3}), color_visible={}, final={}",
+                entity, is_active, is_enabled, blink_visible, input_buffer.cursor_blink_time, style.blink_interval, color_visible, cursor_visable
+            );
+        }
 
         let cursor_position = input_buffer
             .editor
@@ -271,62 +283,93 @@ pub fn extract_text_input_prompts(
     mut commands: Commands,
     mut extracted_uinodes: ResMut<ExtractedUiNodes>,
     texture_atlases: Extract<Res<Assets<TextureAtlasLayout>>>,
-    uinode_query: Extract<
-        Query<(
-            Entity,
-            &ComputedNode,
-            &GlobalTransform,
-            &InheritedVisibility,
-            Option<&CalculatedClip>,
-            &ComputedNodeTarget,
-            &TextInputPromptLayoutInfo,
-            &TextColor,
-            &TextInputBuffer,
-            &TextInputPrompt,
-        )>,
-    >,
+    // 手动提取：分别查询各个组件
+    prompt_query: Extract<Query<(Entity, &TextInputPrompt)>>,
+    layout_query: Extract<Query<&TextInputPromptLayoutInfo>>,
+    buffer_query: Extract<Query<&TextInputBuffer>>,
+    node_query: Extract<Query<(&ComputedNode, &UiGlobalTransform, &InheritedVisibility, Option<&CalculatedClip>, Option<&ComputedNodeTarget>)>>,
+    color_query: Extract<Query<&TextColor>>,
     camera_map: Extract<UiCameraMap>,
 ) {
     let mut camera_mapper = camera_map.get_mapper();
 
+    bevy::log::info!("extract_text_input_prompts: start manual extraction");
+
+    let prompt_count = prompt_query.iter().count();
+    bevy::log::info!("extract_text_input_prompts: found {} prompt entities", prompt_count);
+
     let mut start = extracted_uinodes.glyphs.len();
+
     let mut end = start + 1;
 
-    for (
-        entity,
-        uinode,
-        global_transform,
-        inherited_visibility,
-        clip,
-        target,
-        text_layout_info,
-        text_color,
-        input,
-        prompt,
-    ) in &uinode_query
-    {
+    // 手动提取数据：遍历所有有 TextInputPrompt 的实体
+    for (entity, prompt) in prompt_query.iter() {
+        // 检查是否有所需的其他组件
+        let Ok(text_layout_info) = layout_query.get(entity) else {
+            bevy::log::trace!("prompt skip: entity {:?} missing TextInputPromptLayoutInfo", entity);
+            continue;
+        };
+
+        let Ok(input) = buffer_query.get(entity) else {
+            bevy::log::trace!("prompt skip: entity {:?} missing TextInputBuffer", entity);
+            continue;
+        };
+
+        let Ok((uinode, ui_global_transform, inherited_visibility, clip, target)) = node_query.get(entity) else {
+            bevy::log::trace!("prompt skip: entity {:?} missing node components", entity);
+            continue;
+        };
+
+        let Ok(text_color) = color_query.get(entity) else {
+            bevy::log::trace!("prompt skip: entity {:?} missing TextColor", entity);
+            continue;
+        };
         // only display the prompt if the text input is empty, including whitespace
-        if !input.editor.with_buffer(is_buffer_empty) {
+        let empty = input.editor.with_buffer(is_buffer_empty);
+        if !empty {
+            bevy::log::trace!("prompt skip: buffer not empty for entity={:?}", entity);
             continue;
         }
 
-        // Skip if not visible or if size is set to zero (e.g. when a parent is set to `Display::None`)
-        if !inherited_visibility.get() || uinode.is_empty() {
+        // visibility and non-empty node
+        let vis = inherited_visibility.get();
+        let node_empty = uinode.is_empty();
+        if !vis || node_empty {
+            bevy::log::warn!(
+                "prompt skip: visibility/node (visible={}, node_empty={}) entity={:?} size={:?}",
+                vis, node_empty, entity, uinode.size()
+            );
             continue;
         }
 
-        let Some(extracted_camera_entity) = camera_mapper.map(target) else {
-            continue;
+        let extracted_camera_entity = if let Some(target) = target {
+            let Some(extracted_camera_entity) = camera_mapper.map(target) else {
+                bevy::log::warn!("prompt skip: no camera mapping for entity={:?}", entity);
+                continue;
+            };
+            extracted_camera_entity
+        } else {
+            // 如果没有 ComputedNodeTarget，使用默认相机
+            bevy::log::trace!("prompt: no ComputedNodeTarget, using default camera for entity={:?}", entity);
+            continue; // 暂时跳过，需要更好的默认相机处理
         };
 
         let color = prompt.color.unwrap_or(text_color.0).to_linear();
 
-        let transform = global_transform.affine()
-            * bevy::math::Affine3A::from_translation((-0.5 * uinode.size()).extend(0.));
+        bevy::log::info!(
+            "prompt extract: entity={:?}, glyphs_len={}, size={:?}",
+            entity,
+            text_layout_info.glyphs.len(),
+            uinode.size()
+        );
+
+        // UI 使用 2D 变换，不需要 3D 变换
+        let ui_transform = **ui_global_transform;
+        let transform = ui_transform * bevy::math::Affine2::from_translation(-0.5 * uinode.size());
 
         let node_rect = Rect::from_center_size(
-            global_transform.translation().truncate(),
-            uinode.size() * global_transform.scale().truncate(),
+            ui_transform.translation,
+            uinode.size(),
         );
 
         let clip = Some(
@@ -334,6 +377,13 @@ pub fn extract_text_input_prompts(
                 .unwrap_or(node_rect),
         );
 
+        if text_layout_info.glyphs.is_empty() {
+            bevy::log::warn!(
+                "prompt skip: no glyphs generated for entity={:?} (size={:?})",
+                entity,
+                uinode.size()
+            );
+        }
         for TextInputGlyph {
             position,
             atlas_info,
@@ -346,14 +396,7 @@ pub fn extract_text_input_prompts(
                 .textures[atlas_info.location.glyph_index]
                 .as_rect();
             extracted_uinodes.glyphs.push(ExtractedGlyph {
-                transform: {
-                    let mat = transform * Mat4::from_translation(position.extend(0.));
-                    Affine2::from_cols(
-                        mat.x_axis.truncate().truncate(),
-                        mat.y_axis.truncate().truncate(),
-                        mat.w_axis.truncate().truncate()
-                    )
-                },
+                transform: transform * bevy::math::Affine2::from_translation(*position),
                 rect,
             });
             extracted_uinodes.uinodes.push(ExtractedUiNode {

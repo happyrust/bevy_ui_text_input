@@ -44,6 +44,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             BackgroundColor(Color::NONE),
+            Transform::default(),
         ))
         .with_children(|parent| {
             // Title
@@ -76,6 +77,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                         ..default()
                     },
                     NoteContainer,
+                    Transform::default(),
                 ))
                 .with_children(|parent| {
                     // Define sticky notes data
@@ -144,7 +146,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                                                 selected_text_color: None,
                                                 ..default()
                                             },
-                                            TextInputPrompt::new("写点什么..."),
+                                            TextInputPrompt { text: "写点什么...".into(), color: Some(Color::srgb(0.35, 0.35, 0.35)), font: None },
                                             Node {
                                                 width: Val::Percent(100.0),
                                                 height: Val::Percent(100.0),
