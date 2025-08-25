@@ -37,15 +37,15 @@ use bevy::picking::events::Click;
 use bevy::picking::events::Drag;
 use bevy::picking::events::Move;
 use bevy::picking::events::Pointer;
-use bevy::picking::events::Pressed;
+
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerButton;
-use bevy::text::cosmic_text::Action;
-use bevy::text::cosmic_text::BorrowedWithFontSystem;
-use bevy::text::cosmic_text::Edit;
-use bevy::text::cosmic_text::Editor;
-use bevy::text::cosmic_text::Motion;
-use bevy::text::cosmic_text::Selection;
+use cosmic_text::Action;
+use cosmic_text::BorrowedWithFontSystem;
+use cosmic_text::Edit;
+use cosmic_text::Editor;
+use cosmic_text::Motion;
+use cosmic_text::Selection;
 use bevy::time::Time;
 use bevy::transform::components::GlobalTransform;
 use bevy::ui::ComputedNode;
@@ -69,7 +69,7 @@ pub fn apply_motion<'a>(
     editor.action(Action::Motion(motion));
 }
 
-pub fn buffer_len(buffer: &bevy::text::cosmic_text::Buffer) -> usize {
+pub fn buffer_len(buffer: &cosmic_text::Buffer) -> usize {
     buffer
         .lines
         .iter()
@@ -88,7 +88,7 @@ pub fn cursor_at_line_end(editor: &mut BorrowedWithFontSystem<Editor<'_>>) -> bo
     })
 }
 
-pub(crate) fn is_buffer_empty(buffer: &bevy::text::cosmic_text::Buffer) -> bool {
+pub(crate) fn is_buffer_empty(buffer: &cosmic_text::Buffer) -> bool {
     buffer.lines.len() == 0 || (buffer.lines.len() == 1 && buffer.lines[0].text().is_empty())
 }
 
@@ -140,7 +140,7 @@ pub(crate) fn on_drag_text_input(
 }
 
 pub(crate) fn on_text_input_pressed(
-    trigger: Trigger<Pointer<Pressed>>,
+    trigger: Trigger<Pointer<bevy::picking::events::Press>>,
     mut node_query: Query<(
         &ComputedNode,
         &GlobalTransform,
@@ -248,7 +248,7 @@ pub fn on_multi_click_set_selection(
         return;
     }
 
-    let entity = click.target();
+    let Some(entity) = click.target() else { return; };
 
     let Ok((input, mut queue, mut buffer, transform, node)) = text_input_nodes.get_mut(entity)
     else {
@@ -306,8 +306,10 @@ pub fn on_multi_click_set_selection(
 }
 
 pub fn on_move_clear_multi_click(move_: Trigger<Pointer<Move>>, mut commands: Commands) {
-    if let Ok(mut entity) = commands.get_entity(move_.target()) {
-        entity.try_remove::<MultiClickData>();
+    if let Some(target) = move_.target() {
+        if let Ok(mut entity) = commands.get_entity(target) {
+            entity.try_remove::<MultiClickData>();
+        }
     }
 }
 
@@ -612,7 +614,8 @@ pub fn on_focused_keyboard_input(
     mut query: Query<(&TextInputNode, &mut TextInputQueue)>,
     mut global_state: ResMut<TextInputGlobalState>,
 ) {
-    if let Ok((input, mut queue)) = query.get_mut(trigger.target()) {
+    if let Some(target) = trigger.target() {
+        if let Ok((input, mut queue)) = query.get_mut(target) {
         let TextInputGlobalState {
             shift,
             overwrite_mode,
@@ -628,6 +631,7 @@ pub fn on_focused_keyboard_input(
                 queue.add(action);
             },
         );
+        }
     }
 }
 
@@ -685,7 +689,7 @@ pub fn toggle_ime_on_focus(
     // because IME is mostly useful on mobile,
     // it's ok to only support single window for now.
     window: Single<Entity, With<Window>>,
-    winit_windows: NonSend<WinitWindows>,
+    winit_windows: Option<NonSend<WinitWindows>>,
     mut ime_allowed: Local<bool>,
 ) {
     if input_focus.is_changed() {
@@ -694,18 +698,20 @@ pub fn toggle_ime_on_focus(
             .is_some_and(|focused_entity| text_inputs.get(focused_entity).is_ok());
 
         if is_text_input_focused != *ime_allowed {
-            let Some(window) = winit_windows.get_window(*window) else {
-                warn!("no window found to toggle IME on");
-                return;
-            };
+            if let Some(winit_windows) = winit_windows {
+                let Some(window) = winit_windows.get_window(*window) else {
+                    warn!("no window found to toggle IME on");
+                    return;
+                };
 
-            *ime_allowed = is_text_input_focused;
-            window.set_ime_allowed(*ime_allowed);
-            
-            // Note: IME cursor position could be set here with window.set_ime_cursor_area()
-            // but it requires proper coordinate conversion and winit types that may vary
-            // between Bevy versions. The IME will still work without explicit positioning,
-            // it will just appear at a default location determined by the OS.
+                *ime_allowed = is_text_input_focused;
+                window.set_ime_allowed(*ime_allowed);
+
+                // Note: IME cursor position could be set here with window.set_ime_cursor_area()
+                // but it requires proper coordinate conversion and winit types that may vary
+                // between Bevy versions. The IME will still work without explicit positioning,
+                // it will just appear at a default location determined by the OS.
+            }
         }
     }
 }

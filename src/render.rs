@@ -17,16 +17,13 @@ use bevy::ecs::system::Res;
 use bevy::ecs::system::ResMut;
 use bevy::image::TextureAtlasLayout;
 use bevy::input_focus::InputFocus;
-use bevy::math::Mat4;
-use bevy::math::Rect;
-use bevy::math::Vec2;
-use bevy::math::Vec3;
+use bevy::math::{Affine2, Mat3, Rect, Vec2};
 use bevy::render::Extract;
 use bevy::render::sync_world::TemporaryRenderEntity;
 use bevy::render::view::InheritedVisibility;
 use bevy::sprite::BorderRect;
 use bevy::text::TextColor;
-use bevy::text::cosmic_text::Edit;
+use cosmic_text::Edit;
 use bevy::transform::components::GlobalTransform;
 use bevy::ui::CalculatedClip;
 use bevy::ui::ComputedNode;
@@ -139,7 +136,7 @@ pub fn extract_text_input_nodes(
                     border_radius: ResolvedBorderRadius::ZERO,
                     border: BorderRect::ZERO,
                     node_type: NodeType::Rect,
-                    transform: transform * Mat4::from_translation(rect.center().extend(0.)),
+                    transform: Affine2::from_mat3(transform.matrix3.into()) * Affine2::from_translation(rect.center()),
                 },
                 main_entity: entity.into(),
                 render_entity: commands.spawn(TemporaryRenderEntity).id(),
@@ -187,7 +184,7 @@ pub fn extract_text_input_nodes(
             };
 
             extracted_uinodes.glyphs.push(ExtractedGlyph {
-                transform: transform * Mat4::from_translation(position.extend(0.)),
+                transform: Affine2::from_mat3(transform.matrix3.into()) * Affine2::from_translation(*position),
                 rect,
             });
 
@@ -233,11 +230,10 @@ pub fn extract_text_input_nodes(
                     border_radius: ResolvedBorderRadius::ZERO,
                     border: BorderRect::ZERO,
                     node_type: NodeType::Rect,
-                    transform: transform
-                        * Mat4::from_translation(Vec3::new(
+                    transform: Affine2::from_mat3(transform.matrix3.into())
+                        * Affine2::from_translation(Vec2::new(
                             x + 0.5 * width,
                             y + 0.5 * line_height,
-                            0.,
                         )),
                 },
                 main_entity: entity.into(),
@@ -326,7 +322,7 @@ pub fn extract_text_input_prompts(
                 .textures[atlas_info.location.glyph_index]
                 .as_rect();
             extracted_uinodes.glyphs.push(ExtractedGlyph {
-                transform: transform * Mat4::from_translation(position.extend(0.)),
+                transform: Affine2::from_mat3(transform.matrix3.into()) * Affine2::from_translation(*position),
                 rect,
             });
             extracted_uinodes.uinodes.push(ExtractedUiNode {
