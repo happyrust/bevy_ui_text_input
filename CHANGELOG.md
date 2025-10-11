@@ -1,5 +1,15 @@
 ## Changelog
 
+### 0.6.0
+
+* Bevy 0.17 support.
+* `TextSubmitEvent` has been renamed to `SubmitEvent`
+* `TextInputQueue::next` is now accessed via its `Iterator` implementation.
+* `TextInputNode` no longer has a filter field. `TextInputFilter` is separate component.
+* Added `PositiveInteger`, `Alphanumeric` and `Custom` variants to `TextInputFilter`. The `Custom` field takes a boxed closure to use as a custom filter.
+* Removed the `regex` dependency.
+
+
 ### 0.5.2
 * Fixed cargo description text.
 
@@ -23,9 +33,9 @@
         },
     )
     ```
-    
+
 ### 0.4.0
-* Improved performance. Text input layouts should only be regenerated after edits now. 
+* Improved performance. Text input layouts should only be regenerated after edits now.
 * The `ActiveTextInput` resource is removed. Use `InputFocus` to set the active text input.
 * Fixed command binds so that they work when capslock is on.
 * `TextInputNode`s are unfocused when despawned.
@@ -39,4 +49,4 @@ co-authored by [databasedav](https://github.com/databasedav)
 * Bevy 0.16 support.
 
 ### 0.2.0
-* New `line_height` parameter on `TextInputNode`. 
+* New `line_height` parameter on `TextInputNode`.
