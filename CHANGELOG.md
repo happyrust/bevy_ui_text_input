@@ -1,10 +1,15 @@
 ## Changelog
 
 ### 0.6.0
+* Bevy 0.17 support.
+* `TextSubmitEvent` has been renamed to `SubmitText` and now uses Bevy's message API.
+* `TextInputQueue::next` is now accessed via its `Iterator` implementation.
+* `TextInputNode` no longer has a `filter` field; `TextInputFilter` is a separate optional component.
+* Added `PositiveInteger`, `Alphanumeric` and `Custom` variants to `TextInputFilter`. The `Custom` field takes a boxed closure to use as a custom filter.
+* Removed the `regex` dependency.
 * Added full IME (Input Method Editor) support for inputting Chinese, Japanese, Korean and other languages that require composition.
-* Added `listen_ime_events` observer to handle IME commit events.
-* Added `toggle_ime_on_focus` system to automatically enable/disable IME when text input gains/loses focus.
-* Added Chinese input examples (`chinese_input.rs`, `chinese_debug.rs`, `ime_test.rs`, `ime_window_test.rs`) demonstrating IME functionality.
+* Added `listen_ime_events` and `toggle_ime_on_focus` systems to synchronize IME state with focused inputs.
+* Added Chinese IME examples (`chinese_input.rs`, `chinese_debug.rs`, `ime_test.rs`, `ime_window_test.rs`) demonstrating IME functionality.
 * Fixed incorrect mapping of `TextInputEdit::Unindent` to `Action::Indent`.
 
 ### 0.5.2
@@ -30,9 +35,9 @@
         },
     )
     ```
-    
+
 ### 0.4.0
-* Improved performance. Text input layouts should only be regenerated after edits now. 
+* Improved performance. Text input layouts should only be regenerated after edits now.
 * The `ActiveTextInput` resource is removed. Use `InputFocus` to set the active text input.
 * Fixed command binds so that they work when capslock is on.
 * `TextInputNode`s are unfocused when despawned.
@@ -46,4 +51,4 @@ co-authored by [databasedav](https://github.com/databasedav)
 * Bevy 0.16 support.
 
 ### 0.2.0
-* New `line_height` parameter on `TextInputNode`. 
+* New `line_height` parameter on `TextInputNode`.

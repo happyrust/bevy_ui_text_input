@@ -8,7 +8,7 @@ use bevy::asset::AssetEvent;
 use bevy::asset::AssetId;
 use bevy::asset::Assets;
 use bevy::ecs::change_detection::DetectChanges;
-use bevy::ecs::event::EventReader;
+use bevy::ecs::message::MessageReader;
 use bevy::ecs::resource::Resource;
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
@@ -28,17 +28,11 @@ use bevy::text::LineHeight;
 use bevy::text::TextBounds;
 use bevy::text::TextError;
 use bevy::text::TextFont;
-// YAxisOrientation is no longer available, we'll define our own
-#[derive(Clone, Copy)]
-enum YAxisOrientation {
-    TopToBottom,
-    BottomToTop,
-}
+use bevy::ui::ComputedNode;
 use cosmic_text;
 use cosmic_text::Buffer;
 use cosmic_text::Edit;
 use cosmic_text::Metrics;
-use bevy::ui::ComputedNode;
 use std::sync::Arc;
 
 #[derive(Resource)]
@@ -130,7 +124,6 @@ pub fn text_input_system(
 ) {
     for (node, text_font, text_input_layout_info, mut editor, input) in text_query.iter_mut() {
         let layout_info = text_input_layout_info.into_inner();
-        let y_axis_orientation = YAxisOrientation::TopToBottom;
         if editor.needs_update || text_font.is_changed() || node.is_changed() || input.is_changed()
         {
             let bounds = TextBounds {
@@ -211,18 +204,17 @@ pub fn text_input_system(
             let result = editor.with_buffer_mut(|buffer| {
                 let box_size = buffer_dimensions(buffer);
                 let result = buffer.layout_runs().try_for_each(|run| {
-                    if let Some(selection) = selection {
-                        if let Some((x0, w)) = run.highlight(selection.0, selection.1) {
-                            let y0 = run.line_top;
-                            let y1 = y0 + run.line_height;
-                            let x1 = x0 + w;
-                            let r = Rect::new(x0, y0, x1, y1);
-                            selection_rects.push(r);
-                        }
+                    if let Some(selection) = selection
+                        && let Some((x0, w)) = run.highlight(selection.0, selection.1)
+                    {
+                        let y0 = run.line_top;
+                        let y1 = y0 + run.line_height;
+                        let x1 = x0 + w;
+                        let r = Rect::new(x0, y0, x1, y1);
+                        selection_rects.push(r);
                     }
 
-                    let result = run
-                        .glyphs
+                    run.glyphs
                         .iter()
                         .map(move |layout_glyph| (layout_glyph, run.line_y, run.line_i))
                         .try_for_each(|(layout_glyph, line_y, line_i)| {
@@ -274,7 +266,7 @@ pub fn text_input_system(
                                 })?;
 
                             let texture_atlas =
-                                texture_atlases.get(&atlas_info.texture_atlas).unwrap();
+                                texture_atlases.get(atlas_info.texture_atlas).unwrap();
                             let location = atlas_info.location;
                             let glyph_rect = texture_atlas.textures[location.glyph_index];
                             let left = location.offset.x as f32;
@@ -285,10 +277,6 @@ pub fn text_input_system(
                             let x = glyph_size.x as f32 / 2.0 + left + physical_glyph.x as f32;
                             let y = line_y.round() + physical_glyph.y as f32 - top
                                 + glyph_size.y as f32 / 2.0;
-                            let y = match y_axis_orientation {
-                                YAxisOrientation::TopToBottom => y,
-                                YAxisOrientation::BottomToTop => box_size.y - y,
-                            };
 
                             let position = Vec2::new(x, y);
 
@@ -303,9 +291,7 @@ pub fn text_input_system(
                             };
                             layout_info.glyphs.push(pos_glyph);
                             Ok(())
-                        });
-
-                    result
+                        })
                 });
 
                 // Check result.
@@ -323,8 +309,8 @@ pub fn text_input_system(
                     panic!("Fatal error when processing text: {e}.");
                 }
                 Ok(()) => {
-                    layout_info.size.x = layout_info.size.x * node.inverse_scale_factor();
-                    layout_info.size.y = layout_info.size.y * node.inverse_scale_factor();
+                    layout_info.size.x *= node.inverse_scale_factor();
+                    layout_info.size.y *= node.inverse_scale_factor();
                     editor.set_redraw(false);
                 }
             }
@@ -350,7 +336,6 @@ pub fn text_input_prompt_system(
         text_query.iter_mut()
     {
         let layout_info = text_input_layout_info.into_inner();
-        let y_axis_orientation = YAxisOrientation::TopToBottom;
         if prompt.is_changed()
             || input.is_changed()
             || editor.prompt_buffer.is_none()
@@ -361,7 +346,6 @@ pub fn text_input_prompt_system(
             layout_info.glyphs.clear();
 
             if prompt.text.is_empty() {
-                bevy::log::warn!("prompt.layout: empty prompt text, skip");
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -372,7 +356,6 @@ pub fn text_input_prompt_system(
                 ..
             } = &mut *text_input_pipeline;
             if !fonts.contains(text_font.font.id()) {
-                bevy::log::warn!("prompt.layout: font not yet loaded, skip");
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -388,10 +371,6 @@ pub fn text_input_prompt_system(
                 .scale(node.inverse_scale_factor().recip());
 
             if metrics.font_size <= 0. || metrics.line_height <= 0. {
-                bevy::log::warn!(
-                    "prompt.layout: invalid metrics (font_size={:.3}, line_height={:.3}), skip",
-                    metrics.font_size, metrics.line_height
-                );
                 editor.prompt_buffer = None;
                 continue;
             }
@@ -406,7 +385,7 @@ pub fn text_input_prompt_system(
                 height: Some(node.size().y),
             };
 
-            let face_info = load_font_to_fontdb(&font, font_system, map_handle_to_font_id, &fonts);
+            let face_info = load_font_to_fontdb(font, font_system, map_handle_to_font_id, &fonts);
 
             buffer.set_size(font_system, bounds.width, bounds.height);
 
@@ -440,17 +419,11 @@ pub fn text_input_prompt_system(
                 buffer_line.set_align(align);
             }
 
-            bevy::log::info!(
-                "prompt.layout: node_size={:?}, font_size={:.1}, line_height={:.1}, justification={:?}",
-                node.size(), font.font_size, line_height, input.justification
-            );
-
             buffer.shape_until_scroll(font_system, false);
 
             let box_size = buffer_dimensions(buffer);
             let result = buffer.layout_runs().try_for_each(|run| {
-                let result = run
-                    .glyphs
+                run.glyphs
                     .iter()
                     .map(move |layout_glyph| (layout_glyph, run.line_y, run.line_i))
                     .try_for_each(|(layout_glyph, line_y, line_i)| {
@@ -500,7 +473,7 @@ pub fn text_input_prompt_system(
                                 )
                             })?;
 
-                        let texture_atlas = texture_atlases.get(&atlas_info.texture_atlas).unwrap();
+                        let texture_atlas = texture_atlases.get(atlas_info.texture_atlas).unwrap();
                         let location = atlas_info.location;
                         let glyph_rect = texture_atlas.textures[location.glyph_index];
                         let left = location.offset.x as f32;
@@ -511,10 +484,6 @@ pub fn text_input_prompt_system(
                         let x = glyph_size.x as f32 / 2.0 + left + physical_glyph.x as f32;
                         let y = line_y.round() + physical_glyph.y as f32 - top
                             + glyph_size.y as f32 / 2.0;
-                        let y = match y_axis_orientation {
-                            YAxisOrientation::TopToBottom => y,
-                            YAxisOrientation::BottomToTop => box_size.y - y,
-                        };
 
                         let position = Vec2::new(x, y);
 
@@ -529,9 +498,7 @@ pub fn text_input_prompt_system(
                         };
                         layout_info.glyphs.push(pos_glyph);
                         Ok(())
-                    });
-
-                result
+                    })
             });
 
             layout_info.size = box_size;
@@ -545,8 +512,8 @@ pub fn text_input_prompt_system(
                     panic!("Fatal error when processing text: {e}.");
                 }
                 Ok(()) => {
-                    layout_info.size.x = layout_info.size.x * node.inverse_scale_factor();
-                    layout_info.size.y = layout_info.size.y * node.inverse_scale_factor();
+                    layout_info.size.x *= node.inverse_scale_factor();
+                    layout_info.size.y *= node.inverse_scale_factor();
                 }
             }
         }
@@ -555,7 +522,7 @@ pub fn text_input_prompt_system(
 
 pub fn remove_dropped_font_atlas_sets_from_text_input_pipeline(
     mut text_input_pipeline: ResMut<TextInputPipeline>,
-    mut font_events: EventReader<AssetEvent<Font>>,
+    mut font_events: MessageReader<AssetEvent<Font>>,
 ) {
     for event in font_events.read() {
         if let AssetEvent::Removed { id } = event {

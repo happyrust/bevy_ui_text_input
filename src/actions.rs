@@ -7,6 +7,7 @@ use cosmic_text::Selection;
 
 use crate::TextInputFilter;
 use crate::clipboard::ClipboardRead;
+use crate::edit::apply_action;
 use crate::edit::apply_motion;
 use crate::edit::buffer_len;
 use crate::edit::cursor_at_line_end;
@@ -76,13 +77,17 @@ pub enum TextInputEdit {
     Redo,
     SelectAll,
 }
+
 /// apply a single `TextInputEdit` to a text editor buffer
 pub fn apply_text_input_edit(
     edit: TextInputEdit,
     editor: &mut BorrowedWithFontSystem<'_, Editor<'static>>,
+    changes: &mut cosmic_undo_2::Commands<cosmic_text::Change>,
     max_chars: Option<usize>,
-    _filter_mode: &Option<TextInputFilter>,
+    filter_mode: Option<&TextInputFilter>,
 ) {
+    editor.start_change();
+
     match edit {
         TextInputEdit::Motion(motion, with_select) => {
             apply_motion(editor, with_select, motion);
@@ -141,12 +146,16 @@ pub fn apply_text_input_edit(
             }
         }
         TextInputEdit::Undo => {
-            // For now, undo functionality is disabled
-            // TODO: Implement proper undo/redo system
+            for action in changes.undo() {
+                apply_action(editor, action);
+                editor.set_redraw(true);
+            }
         }
         TextInputEdit::Redo => {
-            // For now, redo functionality is disabled
-            // TODO: Implement proper undo/redo system
+            for action in changes.redo() {
+                apply_action(editor, action);
+                editor.set_redraw(true);
+            }
         }
         TextInputEdit::SelectAll => {
             editor.action(Action::Motion(Motion::BufferStart));
@@ -158,4 +167,24 @@ pub fn apply_text_input_edit(
             editor.action(Action::Enter);
         }
     }
+
+    let Some(mut change) = editor.finish_change() else {
+        return;
+    };
+
+    if change.items.is_empty() {
+        return;
+    }
+
+    if let Some(filter_mode) = filter_mode {
+        let text = editor.with_buffer(crate::get_text);
+        if !filter_mode.is_match(&text) {
+            change.reverse();
+            editor.apply_change(&change);
+            return;
+        }
+    }
+
+    changes.push(change);
+    editor.set_redraw(true);
 }

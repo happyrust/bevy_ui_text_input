@@ -13,9 +13,9 @@ use bevy::color::Color;
 use bevy::color::palettes::css::SKY_BLUE;
 use bevy::color::palettes::tailwind::GRAY_400;
 use bevy::ecs::component::Component;
-use bevy::ecs::lifecycle::HookContext;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::event::Event;
+use bevy::ecs::lifecycle::HookContext;
+use bevy::ecs::message::Message;
 use bevy::ecs::observer::Observer;
 use bevy::ecs::query::Changed;
 use bevy::ecs::resource::Resource;
@@ -28,17 +28,16 @@ use bevy::prelude::ReflectComponent;
 use bevy::reflect::{Reflect, std_traits::ReflectDefault};
 use bevy::render::{ExtractSchedule, RenderApp};
 use bevy::render::sync_world::SyncToRenderWorld;
-use cosmic_text::{Buffer, Edit, Editor, Metrics, Wrap};
 use bevy::text::{GlyphAtlasInfo, TextFont};
 use bevy::text::{Justify, TextColor};
-use bevy::ui::{Node, RenderUiSystems, UiSystems, extract_text_sections};
+use bevy::ui::{Node, UiSystems};
+use bevy::ui_render::{RenderUiSystems, extract_text_sections};
+use cosmic_text::{Buffer, Change, Edit, Editor, Metrics, Wrap};
 use edit::{
     cursor_blink_system, listen_ime_events, mouse_wheel_scroll, on_drag_text_input,
     on_focused_keyboard_input, on_move_clear_multi_click, on_multi_click_set_selection,
     on_text_input_pressed, process_text_input_queues, toggle_ime_on_focus,
 };
-use once_cell::sync::Lazy;
-use regex::Regex;
 use render::{extract_text_input_nodes, extract_text_input_prompts};
 use text_input_pipeline::{
     TextInputPipeline, remove_dropped_font_atlas_sets_from_text_input_pipeline,
@@ -49,7 +48,7 @@ pub struct TextInputPlugin;
 
 impl Plugin for TextInputPlugin {
     fn build(&self, app: &mut bevy::app::App) {
-        app.add_event::<TextSubmitEvent>()
+        app.add_message::<SubmitText>()
             .add_plugins(bevy::input_focus::InputDispatchPlugin)
             .init_resource::<TextInputGlobalState>()
             .init_resource::<TextInputPipeline>()
@@ -57,7 +56,8 @@ impl Plugin for TextInputPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    remove_dropped_font_atlas_sets_from_text_input_pipeline.before(AssetEventSystems),
+                    remove_dropped_font_atlas_sets_from_text_input_pipeline
+                        .before(AssetEventSystems),
                     (
                         toggle_ime_on_focus,
                         listen_ime_events,
@@ -83,12 +83,12 @@ impl Plugin for TextInputPlugin {
                 .chain()
                 .in_set(RenderUiSystems::ExtractText)
                 .after(extract_text_sections)
-                .after(RenderUiSystems::ExtractBackgrounds), // 确保在背景提取之后运行
+                .after(RenderUiSystems::ExtractBackgrounds),
         );
     }
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Clone)]
 #[require(
     Node,
     TextInputBuffer,
@@ -109,8 +109,6 @@ pub struct TextInputNode {
     pub clear_on_submit: bool,
     /// Type of text input
     pub mode: TextInputMode,
-    /// Optional filter for the text input
-    pub filter: Option<TextInputFilter>,
     /// Maximum number of characters that can entered into the input buffer
     pub max_chars: Option<usize>,
     /// Should overwrite mode be available
@@ -130,7 +128,6 @@ impl Default for TextInputNode {
         Self {
             clear_on_submit: true,
             mode: TextInputMode::default(),
-            filter: None,
             max_chars: None,
             allow_overwrite_mode: true,
             is_enabled: true,
@@ -161,9 +158,12 @@ fn on_remove_unfocus(mut world: DeferredWorld, context: HookContext) {
     }
 }
 
+#[deprecated(since = "0.6.0", note = "Use `SubmitText` instead")]
+pub type TextSubmitEvent = SubmitText;
+
 /// Sent when a text input submits its text
-#[derive(Event)]
-pub struct TextSubmitEvent {
+#[derive(Message)]
+pub struct SubmitText {
     /// The text input entity that submitted the text
     pub entity: Entity,
     /// The submitted text
@@ -182,9 +182,13 @@ pub enum TextInputMode {
     SingleLine,
 }
 
-/// Filter for text input
-#[derive(Copy, Clone, Debug, PartialEq)]
+/// Any actions that modify a text input's text so that it fails
+/// to pass the filter are not applied.
+#[derive(Component)]
 pub enum TextInputFilter {
+    /// Positive integer input
+    /// accepts only digits
+    PositiveInteger,
     /// Integer input
     /// accepts only digits and a leading sign
     Integer,
@@ -194,21 +198,61 @@ pub enum TextInputFilter {
     /// Hexadecimal input
     /// accepts only `0-9`, `a-f` and `A-F`
     Hex,
+    /// Alphanumeric input
+    /// accepts only `0-9`, `a-z` and `A-Z`
+    Alphanumeric,
+    /// Custom filter
+    Custom(Box<dyn Fn(&str) -> bool + Send + Sync>),
 }
 
-static INTEGER_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-?$|^-?\d+$").unwrap());
-static DECIMAL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-?$|^-?\d*\.?\d*$").unwrap());
+impl core::fmt::Debug for TextInputFilter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::PositiveInteger => f.write_str("PositiveInteger"),
+            Self::Integer => f.write_str("Integer"),
+            Self::Decimal => f.write_str("Decimal"),
+            Self::Hex => f.write_str("Hex"),
+            Self::Alphanumeric => f.write_str("Alphanumeric"),
+            Self::Custom(_) => f.write_str("Custom"),
+        }
+    }
+}
 
 impl TextInputFilter {
-    pub fn regex(&self) -> Option<&regex::Regex> {
+    /// Returns true if the text passes the filter
+    pub fn is_match(&self, text: &str) -> bool {
+        // Always passes if the input is empty unless using a custom filter
+        if text.is_empty() && !matches!(self, Self::Custom(_)) {
+            return true;
+        }
+
         match self {
-            TextInputFilter::Integer => Some(&INTEGER_REGEX),
-            TextInputFilter::Decimal => Some(&DECIMAL_REGEX),
-            TextInputFilter::Hex => None,
+            TextInputFilter::PositiveInteger => text.chars().all(|c| c.is_ascii_digit()),
+            TextInputFilter::Integer => text
+                .strip_prefix('-')
+                .unwrap_or(text)
+                .chars()
+                .all(|c| c.is_ascii_digit()),
+            TextInputFilter::Decimal => text
+                .strip_prefix('-')
+                .unwrap_or(text)
+                .chars()
+                .try_fold(true, |is_int, c| match c {
+                    '.' if is_int => Ok(false),
+                    c if c.is_ascii_digit() => Ok(is_int),
+                    _ => Err(()),
+                })
+                .is_ok(),
+            TextInputFilter::Hex => text.chars().all(|c| c.is_ascii_hexdigit()),
+            TextInputFilter::Alphanumeric => text.chars().all(|c| c.is_ascii_alphanumeric()),
+            TextInputFilter::Custom(is_match) => is_match(text),
         }
     }
 
-
+    /// Create a custom filter
+    pub fn custom(filter_fn: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
+        Self::Custom(Box::new(filter_fn))
+    }
 }
 
 impl Default for TextInputMode {
@@ -228,14 +272,16 @@ impl TextInputMode {
     }
 }
 
-#[derive(Component, Debug, Clone)]
+#[derive(Component, Debug)]
 pub struct TextInputBuffer {
     pub editor: Editor<'static>,
     pub(crate) selection_rects: Vec<Rect>,
     pub(crate) cursor_blink_time: f32,
     pub(crate) needs_update: bool,
     pub(crate) prompt_buffer: Option<Buffer>,
+    pub(crate) changes: cosmic_undo_2::Commands<Change>,
 }
+
 impl TextInputBuffer {
     pub fn get_text(&self) -> String {
         self.editor.with_buffer(get_text)
@@ -250,6 +296,7 @@ impl Default for TextInputBuffer {
             cursor_blink_time: 0.,
             needs_update: true,
             prompt_buffer: None,
+            changes: cosmic_undo_2::Commands::default(),
         }
     }
 }
@@ -411,13 +458,16 @@ impl TextInputQueue {
         self.actions.push_front(action);
     }
 
-    /// Get the next action
-    pub fn next(&mut self) -> Option<TextInputAction> {
-        self.actions.pop_front()
-    }
-
     /// True if the queue is empty
     pub fn is_empty(&self) -> bool {
         self.actions.is_empty()
+    }
+}
+
+impl Iterator for TextInputQueue {
+    type Item = TextInputAction;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.actions.pop_front()
     }
 }

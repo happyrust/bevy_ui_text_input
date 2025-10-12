@@ -1,10 +1,11 @@
+use crate::SubmitText;
 use crate::TextInputBuffer;
+use crate::TextInputFilter;
 use crate::TextInputGlobalState;
 use crate::TextInputMode;
 use crate::TextInputNode;
 use crate::TextInputQueue;
 use crate::TextInputStyle;
-use crate::TextSubmitEvent;
 use crate::actions::TextInputAction;
 use crate::actions::TextInputEdit;
 use crate::actions::apply_text_input_edit;
@@ -14,12 +15,12 @@ use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
 use bevy::ecs::event::EventReader;
-use bevy::ecs::event::EventWriter;
-use bevy::ecs::observer::Trigger;
+use bevy::ecs::message::MessageReader;
+use bevy::ecs::message::MessageWriter;
+use bevy::ecs::observer::On;
 use bevy::ecs::query::With;
 use bevy::ecs::system::Commands;
 use bevy::ecs::system::Local;
-// NonSend is no longer needed in Bevy 0.16
 use bevy::ecs::system::Query;
 use bevy::ecs::system::Res;
 use bevy::ecs::system::ResMut;
@@ -31,8 +32,6 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input::mouse::MouseWheel;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::InputFocus;
-// use bevy::log::info;
-// warn is no longer needed in Bevy 0.16
 use bevy::math::Rect;
 use bevy::picking::events::Click;
 use bevy::picking::events::Drag;
@@ -41,18 +40,34 @@ use bevy::picking::events::Pointer;
 use bevy::picking::events::Press;
 use bevy::picking::hover::HoverMap;
 use bevy::picking::pointer::PointerButton;
+use bevy::time::Time;
+use bevy::ui::ComputedNode;
+use bevy::ui::UiGlobalTransform;
+use bevy::window::Ime;
+use bevy::window::Window;
 use cosmic_text::Action;
 use cosmic_text::BorrowedWithFontSystem;
+use cosmic_text::Change;
 use cosmic_text::Edit;
 use cosmic_text::Editor;
 use cosmic_text::Motion;
 use cosmic_text::Selection;
-use bevy::time::Time;
-use bevy::transform::components::GlobalTransform;
-use bevy::ui::ComputedNode;
-use bevy::window::Ime;
-use bevy::window::Window;
-// WinitWindows is no longer needed in Bevy 0.16
+
+pub fn apply_action<'a>(
+    editor: &mut BorrowedWithFontSystem<Editor<'a>>,
+    action: cosmic_undo_2::Action<&Change>,
+) {
+    match action {
+        cosmic_undo_2::Action::Do(change) => {
+            editor.apply_change(change);
+        }
+        cosmic_undo_2::Action::Undo(change) => {
+            let mut reversed = change.clone();
+            reversed.reverse();
+            editor.apply_change(&reversed);
+        }
+    }
+}
 
 pub fn apply_motion<'a>(
     editor: &mut BorrowedWithFontSystem<Editor<'a>>,
@@ -90,14 +105,14 @@ pub fn cursor_at_line_end(editor: &mut BorrowedWithFontSystem<Editor<'_>>) -> bo
 }
 
 pub(crate) fn is_buffer_empty(buffer: &cosmic_text::Buffer) -> bool {
-    buffer.lines.len() == 0 || (buffer.lines.len() == 1 && buffer.lines[0].text().is_empty())
+    buffer.lines.is_empty() || (buffer.lines.len() == 1 && buffer.lines[0].text().is_empty())
 }
 
 pub(crate) fn on_drag_text_input(
-    trigger: Trigger<Pointer<Drag>>,
+    trigger: On<Pointer<Drag>>,
     mut node_query: Query<(
         &ComputedNode,
-        &GlobalTransform,
+        &UiGlobalTransform,
         &mut TextInputBuffer,
         &TextInputNode,
     )>,
@@ -108,14 +123,14 @@ pub(crate) fn on_drag_text_input(
         return;
     }
 
-    if !input_focus
+    if input_focus
         .0
-        .is_some_and(|input_focus_entity| input_focus_entity == trigger.target)
+        .is_none_or(|input_focus_entity| input_focus_entity != trigger.entity)
     {
         return;
     }
 
-    let Ok((node, transform, mut buffer, input)) = node_query.get_mut(trigger.target) else {
+    let Ok((node, transform, mut buffer, input)) = node_query.get_mut(trigger.entity) else {
         return;
     };
 
@@ -123,7 +138,7 @@ pub(crate) fn on_drag_text_input(
         return;
     }
 
-    let rect = Rect::from_center_size(transform.translation().truncate(), node.size());
+    let rect = Rect::from_center_size(transform.translation, node.size());
 
     let position =
         trigger.pointer_location.position * node.inverse_scale_factor().recip() - rect.min;
@@ -141,10 +156,10 @@ pub(crate) fn on_drag_text_input(
 }
 
 pub(crate) fn on_text_input_pressed(
-    trigger: Trigger<Pointer<Press>>,
+    trigger: On<Pointer<Press>>,
     mut node_query: Query<(
         &ComputedNode,
-        &GlobalTransform,
+        &UiGlobalTransform,
         &mut TextInputBuffer,
         &TextInputNode,
     )>,
@@ -155,7 +170,7 @@ pub(crate) fn on_text_input_pressed(
         return;
     }
 
-    let Ok((node, transform, mut buffer, input)) = node_query.get_mut(trigger.target) else {
+    let Ok((node, transform, mut buffer, input)) = node_query.get_mut(trigger.entity) else {
         return;
     };
 
@@ -163,14 +178,14 @@ pub(crate) fn on_text_input_pressed(
         return;
     }
 
-    if !input_focus
+    if input_focus
         .get()
-        .is_some_and(|active_input| active_input == trigger.target)
+        .is_none_or(|active_input| active_input != trigger.entity)
     {
-        input_focus.set(trigger.target);
+        input_focus.set(trigger.entity);
     }
 
-    let rect = Rect::from_center_size(transform.translation().truncate(), node.size());
+    let rect = Rect::from_center_size(transform.translation, node.size());
 
     let position =
         trigger.pointer_location.position * node.inverse_scale_factor().recip() - rect.min;
@@ -189,7 +204,7 @@ pub(crate) fn on_text_input_pressed(
 
 /// Updates the scroll position of scrollable nodes in response to mouse input
 pub fn mouse_wheel_scroll(
-    mut mouse_wheel_events: EventReader<MouseWheel>,
+    mut mouse_wheel_events: MessageReader<MouseWheel>,
     hover_map: Res<HoverMap>,
     mut node_query: Query<(&mut TextInputBuffer, &TextInputNode, &mut TextInputQueue)>,
 ) {
@@ -232,13 +247,13 @@ pub struct MultiClickData {
 }
 
 pub fn on_multi_click_set_selection(
-    click: Trigger<Pointer<Click>>,
+    click: On<Pointer<Click>>,
     time: Res<Time>,
     mut text_input_nodes: Query<(
         &TextInputNode,
         &mut TextInputQueue,
         &mut TextInputBuffer,
-        &GlobalTransform,
+        &UiGlobalTransform,
         &ComputedNode,
     )>,
     mut multi_click_datas: Query<&mut MultiClickData>,
@@ -249,9 +264,8 @@ pub fn on_multi_click_set_selection(
         return;
     }
 
-    let entity = click.target();
+    let entity = click.entity;
 
-    let Some(entity) = entity else { return; };
     let Ok((input, mut queue, mut buffer, transform, node)) = text_input_nodes.get_mut(entity)
     else {
         return;
@@ -262,41 +276,40 @@ pub fn on_multi_click_set_selection(
     }
 
     let now = time.elapsed_secs();
-    if let Ok(mut multi_click_data) = multi_click_datas.get_mut(entity) {
-        if now - multi_click_data.last_click_time
+    if let Ok(mut multi_click_data) = multi_click_datas.get_mut(entity)
+        && now - multi_click_data.last_click_time
             <= MULTI_CLICK_PERIOD * multi_click_data.click_count as f32
-        {
-            let rect = Rect::from_center_size(transform.translation().truncate(), node.size());
+    {
+        let rect = Rect::from_center_size(transform.translation, node.size());
 
-            let position =
-                click.pointer_location.position * node.inverse_scale_factor().recip() - rect.min;
-            let mut editor = buffer
-                .editor
-                .borrow_with(&mut text_input_pipeline.font_system);
-            let scroll = editor.with_buffer(|buffer| buffer.scroll());
-            match multi_click_data.click_count {
-                1 => {
-                    multi_click_data.click_count += 1;
-                    multi_click_data.last_click_time = now;
+        let position =
+            click.pointer_location.position * node.inverse_scale_factor().recip() - rect.min;
+        let mut editor = buffer
+            .editor
+            .borrow_with(&mut text_input_pipeline.font_system);
+        let scroll = editor.with_buffer(|buffer| buffer.scroll());
+        match multi_click_data.click_count {
+            1 => {
+                multi_click_data.click_count += 1;
+                multi_click_data.last_click_time = now;
 
-                    queue.add(TextInputAction::Edit(TextInputEdit::DoubleClick {
-                        x: position.x as i32 + scroll.horizontal as i32,
-                        y: position.y as i32,
-                    }));
-                    return;
-                }
-                2 => {
-                    editor.action(Action::Motion(Motion::ParagraphStart));
-                    let cursor = editor.cursor();
-                    editor.set_selection(Selection::Normal(cursor));
-                    editor.action(Action::Motion(Motion::ParagraphEnd));
-                    if let Ok(mut entity) = commands.get_entity(entity) {
-                        entity.try_remove::<MultiClickData>();
-                    }
-                    return;
-                }
-                _ => (),
+                queue.add(TextInputAction::Edit(TextInputEdit::DoubleClick {
+                    x: position.x as i32 + scroll.horizontal as i32,
+                    y: position.y as i32,
+                }));
+                return;
             }
+            2 => {
+                editor.action(Action::Motion(Motion::ParagraphStart));
+                let cursor = editor.cursor();
+                editor.set_selection(Selection::Normal(cursor));
+                editor.action(Action::Motion(Motion::ParagraphEnd));
+                if let Ok(mut entity) = commands.get_entity(entity) {
+                    entity.try_remove::<MultiClickData>();
+                }
+                return;
+            }
+            _ => (),
         }
     }
     if let Ok(mut entity) = commands.get_entity(entity) {
@@ -307,9 +320,8 @@ pub fn on_multi_click_set_selection(
     }
 }
 
-pub fn on_move_clear_multi_click(move_: Trigger<Pointer<Move>>, mut commands: Commands) {
-    let Some(target_entity) = move_.target() else { return; };
-    if let Ok(mut entity) = commands.get_entity(target_entity) {
+pub fn on_move_clear_multi_click(move_: On<Pointer<Move>>, mut commands: Commands) {
+    if let Ok(mut entity) = commands.get_entity(move_.entity) {
         entity.try_remove::<MultiClickData>();
     }
 }
@@ -320,7 +332,7 @@ pub fn queue_text_input_action(
     overwrite_mode: &mut bool,
     command_pressed: &mut bool,
     keyboard_input: &KeyboardInput,
-    mut queue: impl FnMut(TextInputAction) -> (),
+    mut queue: impl FnMut(TextInputAction),
 ) {
     match keyboard_input.logical_key {
         Key::Shift => {
@@ -540,23 +552,24 @@ pub fn process_text_input_queues(
         &TextInputNode,
         &mut TextInputBuffer,
         &mut TextInputQueue,
+        Option<&TextInputFilter>,
     )>,
     mut text_input_pipeline: ResMut<TextInputPipeline>,
-    mut submit_writer: EventWriter<TextSubmitEvent>,
+    mut submit_writer: MessageWriter<SubmitText>,
     mut clipboard: ResMut<Clipboard>,
 ) {
-    let mut font_system = &mut text_input_pipeline.font_system;
+    let font_system = &mut text_input_pipeline.font_system;
 
-    for (entity, node, mut buffer, mut actions_queue) in query.iter_mut() {
+    for (entity, node, mut buffer, mut actions_queue, maybe_filter) in query.iter_mut() {
         let TextInputBuffer {
-            editor, ..
+            editor, changes, ..
         } = &mut *buffer;
-        let mut editor = editor.borrow_with(&mut font_system);
+        let mut editor = editor.borrow_with(font_system);
         while let Some(action) = actions_queue.next() {
             match action {
                 TextInputAction::Submit => {
                     let text = editor.with_buffer(crate::get_text);
-                    submit_writer.write(TextSubmitEvent { entity, text });
+                    submit_writer.write(SubmitText { entity, text });
                     if node.clear_on_submit {
                         actions_queue.add_front(TextInputAction::Edit(TextInputEdit::Delete));
                         actions_queue.add_front(TextInputAction::Edit(TextInputEdit::SelectAll));
@@ -568,8 +581,9 @@ pub fn process_text_input_queues(
                         apply_text_input_edit(
                             TextInputEdit::Delete,
                             &mut editor,
+                            changes,
                             node.max_chars,
-                            &node.filter,
+                            maybe_filter,
                         );
                     }
                 }
@@ -587,8 +601,9 @@ pub fn process_text_input_queues(
                             apply_text_input_edit(
                                 TextInputEdit::Paste(text),
                                 &mut editor,
+                                changes,
                                 node.max_chars,
-                                &node.filter,
+                                maybe_filter,
                             );
                         }
                     } else {
@@ -601,8 +616,9 @@ pub fn process_text_input_queues(
                     apply_text_input_edit(
                         text_input_edit,
                         &mut editor,
+                        changes,
                         node.max_chars,
-                        &node.filter,
+                        maybe_filter,
                     );
                 }
             }
@@ -611,16 +627,11 @@ pub fn process_text_input_queues(
 }
 
 pub fn on_focused_keyboard_input(
-    trigger: Trigger<FocusedInput<KeyboardInput>>,
+    trigger: On<FocusedInput<KeyboardInput>>,
     mut query: Query<(&TextInputNode, &mut TextInputQueue)>,
     mut global_state: ResMut<TextInputGlobalState>,
 ) {
-    let Some(target_entity) = trigger.target() else {
-        // info!("on_focused_keyboard_input: no target entity");
-        return;
-    };
-    // info!("on_focused_keyboard_input: target_entity={:?}, input={:?}", target_entity, trigger.event().input);
-    if let Ok((input, mut queue)) = query.get_mut(target_entity) {
+    if let Ok((input, mut queue)) = query.get_mut(trigger.focused_entity) {
         let TextInputGlobalState {
             shift,
             overwrite_mode,
@@ -646,11 +657,10 @@ pub fn listen_ime_events(
     input_focus: Res<InputFocus>,
 ) {
     for event in ime_events.read() {
-        // IME events are sent to windows, but we need the focused text input entity
         let Some(focused_entity) = input_focus.get() else {
             continue;
         };
-        
+
         let Ok(mut queue) = text_inputs.get_mut(focused_entity) else {
             continue;
         };
@@ -658,29 +668,25 @@ pub fn listen_ime_events(
         let TextInputGlobalState { overwrite_mode, .. } = &mut *global_state;
 
         match event {
-        Ime::Commit { value, .. } => {
-            // Handle committed text from IME (e.g., completed Chinese characters)
-            for character in value.chars() {
-                queue.add(TextInputAction::Edit(TextInputEdit::Insert(
-                    character,
-                    *overwrite_mode,
-                )));
+            Ime::Commit { value, .. } => {
+                for character in value.chars() {
+                    queue.add(TextInputAction::Edit(TextInputEdit::Insert(
+                        character,
+                        *overwrite_mode,
+                    )));
+                }
             }
-        }
-        Ime::Preedit { value, cursor, .. } => {
-            // Handle preedit text (composition text shown during IME input)
-            // For now, we log it for debugging, but in the future this could be
-            // shown as a temporary overlay or inline preview
-            if !value.is_empty() {
-                bevy::log::debug!("IME Preedit: '{}' (cursor: {:?})", value, cursor);
+            Ime::Preedit { value, cursor, .. } => {
+                if !value.is_empty() {
+                    bevy::log::debug!("IME Preedit: '{}' (cursor: {:?})", value, cursor);
+                }
             }
-        }
-        Ime::Enabled { .. } => {
-            bevy::log::debug!("IME Enabled for text input");
-        }
-        Ime::Disabled { .. } => {
-            bevy::log::debug!("IME Disabled for text input");
-        }
+            Ime::Enabled { .. } => {
+                bevy::log::debug!("IME Enabled for text input");
+            }
+            Ime::Disabled { .. } => {
+                bevy::log::debug!("IME Disabled for text input");
+            }
         }
     }
 }
@@ -688,26 +694,17 @@ pub fn listen_ime_events(
 pub fn toggle_ime_on_focus(
     input_focus: Res<InputFocus>,
     text_inputs: Query<&TextInputNode>,
-    // supporting multiple windows requires detecting
-    // on which window the text input is currently on.
-    // because IME is mostly useful on mobile,
-    // it's ok to only support single window for now.
     mut window: Single<&mut Window>,
     mut ime_allowed: Local<bool>,
 ) {
     if input_focus.is_changed() {
-        let is_text_input_focused = input_focus
+        let has_text_input_focus = input_focus
             .get()
             .is_some_and(|focused_entity| text_inputs.get(focused_entity).is_ok());
 
-        if is_text_input_focused != *ime_allowed {
-            *ime_allowed = is_text_input_focused;
+        if has_text_input_focus != *ime_allowed {
+            *ime_allowed = has_text_input_focus;
             window.ime_enabled = *ime_allowed;
-
-            // Note: IME cursor position could be set here with window.ime_position
-            // but it requires proper coordinate conversion. The IME will still work
-            // without explicit positioning, it will just appear at a default location
-            // determined by the OS.
         }
     }
 }
