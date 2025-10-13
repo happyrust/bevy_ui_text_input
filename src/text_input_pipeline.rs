@@ -7,6 +7,7 @@ use crate::TextInputPromptLayoutInfo;
 use bevy::asset::AssetEvent;
 use bevy::asset::AssetId;
 use bevy::asset::Assets;
+use bevy::asset::RenderAssetUsages;
 use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::message::MessageReader;
 use bevy::ecs::resource::Resource;
@@ -16,18 +17,22 @@ use bevy::ecs::system::ResMut;
 use bevy::ecs::world::Ref;
 use bevy::image::Image;
 use bevy::image::TextureAtlasLayout;
+use bevy::math::IVec2;
 use bevy::math::Rect;
 use bevy::math::UVec2;
 use bevy::math::Vec2;
 use bevy::platform::collections::HashMap;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::Font;
+use bevy::text::FontAtlas;
+use bevy::text::FontAtlasKey;
 use bevy::text::FontAtlasSet;
 use bevy::text::FontSmoothing;
-use bevy::text::LineBreak;
-use bevy::text::LineHeight;
+use bevy::text::GlyphAtlasInfo;
 use bevy::text::TextBounds;
 use bevy::text::TextError;
 use bevy::text::TextFont;
+use bevy::text::{LineBreak, LineHeight};
 use bevy::ui::ComputedNode;
 use cosmic_text;
 use cosmic_text::Buffer;
@@ -107,6 +112,137 @@ fn buffer_dimensions(buffer: &cosmic_text::Buffer) -> Vec2 {
         .unwrap_or((0.0, 0.0));
 
     Vec2::new(width, height).ceil()
+}
+
+fn get_glyph_atlas_info_local(
+    font_atlases: &mut [FontAtlas],
+    cache_key: cosmic_text::CacheKey,
+) -> Option<GlyphAtlasInfo> {
+    font_atlases.iter().find_map(|atlas| {
+        atlas
+            .get_glyph_index(cache_key)
+            .map(|location| GlyphAtlasInfo {
+                location,
+                texture_atlas: atlas.texture_atlas.id(),
+                texture: atlas.texture.id(),
+            })
+    })
+}
+
+fn get_outlined_glyph_texture_local(
+    font_system: &mut cosmic_text::FontSystem,
+    swash_cache: &mut cosmic_text::SwashCache,
+    physical_glyph: &cosmic_text::PhysicalGlyph,
+    font_smoothing: FontSmoothing,
+) -> Result<(Image, IVec2), TextError> {
+    let image = swash_cache
+        .get_image_uncached(font_system, physical_glyph.cache_key)
+        .ok_or(TextError::FailedToGetGlyphImage(physical_glyph.cache_key))?;
+
+    let cosmic_text::Placement {
+        left,
+        top,
+        width,
+        height,
+    } = image.placement;
+
+    let data = match image.content {
+        cosmic_text::SwashContent::Mask => {
+            if font_smoothing == FontSmoothing::None {
+                image
+                    .data
+                    .iter()
+                    .flat_map(|a| [255, 255, 255, if *a > 127 { 255 } else { 0 }])
+                    .collect()
+            } else {
+                image
+                    .data
+                    .iter()
+                    .flat_map(|a| [255, 255, 255, *a])
+                    .collect()
+            }
+        }
+        cosmic_text::SwashContent::Color => image.data,
+        cosmic_text::SwashContent::SubpixelMask => {
+            // TODO: implement if needed
+            todo!()
+        }
+    };
+
+    Ok((
+        Image::new(
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            data,
+            TextureFormat::Rgba8UnormSrgb,
+            RenderAssetUsages::MAIN_WORLD,
+        ),
+        IVec2::new(left, top),
+    ))
+}
+
+fn add_glyph_to_atlas_local(
+    font_atlases: &mut Vec<FontAtlas>,
+    texture_atlases: &mut Assets<TextureAtlasLayout>,
+    textures: &mut Assets<Image>,
+    font_system: &mut cosmic_text::FontSystem,
+    swash_cache: &mut cosmic_text::SwashCache,
+    layout_glyph: &cosmic_text::LayoutGlyph,
+    font_smoothing: FontSmoothing,
+) -> Result<GlyphAtlasInfo, TextError> {
+    let physical_glyph = layout_glyph.physical((0., 0.), 1.0);
+
+    let (glyph_texture, offset) = get_outlined_glyph_texture_local(
+        font_system,
+        swash_cache,
+        &physical_glyph,
+        font_smoothing,
+    )?;
+
+    let mut add_char_to_font_atlas = |atlas: &mut FontAtlas| -> Result<(), TextError> {
+        atlas.add_glyph(
+            textures,
+            texture_atlases,
+            physical_glyph.cache_key,
+            &glyph_texture,
+            offset,
+        )
+    };
+
+    if !font_atlases
+        .iter_mut()
+        .any(|atlas| add_char_to_font_atlas(atlas).is_ok())
+    {
+        let glyph_max_size: u32 = glyph_texture
+            .texture_descriptor
+            .size
+            .height
+            .max(glyph_texture.width());
+        let containing = (1u32 << (32 - glyph_max_size.leading_zeros())).max(512);
+        font_atlases.push(FontAtlas::new(
+            textures,
+            texture_atlases,
+            UVec2::splat(containing),
+            font_smoothing,
+        ));
+
+        font_atlases.last_mut().unwrap().add_glyph(
+            textures,
+            texture_atlases,
+            physical_glyph.cache_key,
+            &glyph_texture,
+            offset,
+        )?;
+    }
+
+    Ok(
+        get_glyph_atlas_info_local(font_atlases, physical_glyph.cache_key)
+            .expect("glyph just added to atlas must exist"),
+    )
 }
 
 pub fn text_input_system(
@@ -250,20 +386,27 @@ pub fn text_input_system(
                             let font_atlas_set = font_atlas_sets.entry(font_id).or_default();
 
                             let physical_glyph = layout_glyph.physical((0., 0.), 1.);
+                            let font_key = FontAtlasKey(
+                                font_id,
+                                physical_glyph.cache_key.font_size_bits,
+                                font_smoothing,
+                            );
+                            let font_atlases = font_atlas_set.entry(font_key).or_default();
 
-                            let atlas_info = font_atlas_set
-                                .get_glyph_atlas_info(physical_glyph.cache_key, font_smoothing)
-                                .map(Ok)
-                                .unwrap_or_else(|| {
-                                    font_atlas_set.add_glyph_to_atlas(
-                                        &mut texture_atlases,
-                                        &mut textures,
-                                        font_system,
-                                        swash_cache,
-                                        layout_glyph,
-                                        font_smoothing,
-                                    )
-                                })?;
+                            let atlas_info =
+                                get_glyph_atlas_info_local(font_atlases, physical_glyph.cache_key)
+                                    .map(Ok)
+                                    .unwrap_or_else(|| {
+                                        add_glyph_to_atlas_local(
+                                            font_atlases,
+                                            &mut texture_atlases,
+                                            &mut textures,
+                                            font_system,
+                                            swash_cache,
+                                            layout_glyph,
+                                            font_smoothing,
+                                        )
+                                    })?;
 
                             let texture_atlas =
                                 texture_atlases.get(atlas_info.texture_atlas).unwrap();
@@ -458,20 +601,27 @@ pub fn text_input_prompt_system(
                         let font_atlas_set = font_atlas_sets.entry(font_id).or_default();
 
                         let physical_glyph = layout_glyph.physical((0., 0.), 1.);
+                        let font_key = FontAtlasKey(
+                            font_id,
+                            physical_glyph.cache_key.font_size_bits,
+                            font_smoothing,
+                        );
+                        let font_atlases = font_atlas_set.entry(font_key).or_default();
 
-                        let atlas_info = font_atlas_set
-                            .get_glyph_atlas_info(physical_glyph.cache_key, font_smoothing)
-                            .map(Ok)
-                            .unwrap_or_else(|| {
-                                font_atlas_set.add_glyph_to_atlas(
-                                    &mut texture_atlases,
-                                    &mut textures,
-                                    font_system,
-                                    swash_cache,
-                                    layout_glyph,
-                                    font_smoothing,
-                                )
-                            })?;
+                        let atlas_info =
+                            get_glyph_atlas_info_local(font_atlases, physical_glyph.cache_key)
+                                .map(Ok)
+                                .unwrap_or_else(|| {
+                                    add_glyph_to_atlas_local(
+                                        font_atlases,
+                                        &mut texture_atlases,
+                                        &mut textures,
+                                        font_system,
+                                        swash_cache,
+                                        layout_glyph,
+                                        font_smoothing,
+                                    )
+                                })?;
 
                         let texture_atlas = texture_atlases.get(atlas_info.texture_atlas).unwrap();
                         let location = atlas_info.location;

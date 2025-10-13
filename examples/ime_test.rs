@@ -1,8 +1,9 @@
 //! Test example for built-in IME support
 
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputStyle, TextSubmitEvent,
+    SubmitText, TextInputBuffer, TextInputNode, TextInputPlugin, TextInputStyle,
 };
 
 fn main() {
@@ -15,7 +16,7 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    
+
     // Instructions
     commands.spawn((
         Text::new("Test IME Support - Try typing Chinese/Japanese/Korean text"),
@@ -31,7 +32,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // First text input - with custom font for CJK support
     commands.spawn((
         TextInputNode {
@@ -63,7 +64,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // Second text input - default font
     commands.spawn((
         TextInputNode {
@@ -94,7 +95,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // Multi-line text input
     commands.spawn((
         TextInputNode {
@@ -122,7 +123,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         BorderColor(Color::WHITE),
         TextInputStyle::default(),
     ));
-    
+
     // Submit info
     commands.spawn((
         Text::new("Press Enter to submit (text will be logged to console)"),
@@ -140,7 +141,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn handle_submit(mut events: EventReader<TextSubmitEvent>) {
+fn handle_submit(mut events: MessageReader<SubmitText>) {
     for event in events.read() {
         info!("Text submitted from {:?}: '{}'", event.entity, event.text);
         info!("  Characters: {:?}", event.text.chars().collect::<Vec<_>>());

@@ -1,22 +1,27 @@
 //! Sticky note example that mimics VeloNode styling
 
-use bevy::{
-    prelude::*,
-    window::WindowResized,
-};
-use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputPrompt, TextInputStyle,
-    TextSubmitEvent,
-};
+use bevy::ecs::message::MessageReader;
 use bevy::input_focus::InputFocus;
-use bevy::ui::{Interaction, FocusPolicy};
+use bevy::ui::{FocusPolicy, Interaction};
+use bevy::{prelude::*, window::WindowResized};
+use bevy_ui_text_input::{
+    SubmitText, TextInputBuffer, TextInputNode, TextInputPlugin, TextInputPrompt, TextInputStyle,
+};
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, TextInputPlugin))
         .insert_resource(ClearColor(Color::srgb(0.95, 0.95, 0.95)))
         .add_systems(Startup, setup)
-        .add_systems(Update, (handle_submit, animate_shadow, handle_resize, handle_text_input_click))
+        .add_systems(
+            Update,
+            (
+                handle_submit,
+                animate_shadow,
+                handle_resize,
+                handle_text_input_click,
+            ),
+        )
         .run();
 }
 
@@ -29,7 +34,11 @@ struct NoteShadow;
 #[derive(Component)]
 struct NoteContainer;
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut input_focus: ResMut<InputFocus>) {
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut input_focus: ResMut<InputFocus>,
+) {
     // Camera
     commands.spawn(Camera2d::default());
 
@@ -84,10 +93,26 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut input_focus
                 .with_children(|parent| {
                     // Define sticky notes data
                     let notes = [
-                        (Color::srgb(1.0, 0.925, 0.675), "在这里写下你的想法...\n\n这是一个便笺纸！", -0.02),
-                        (Color::srgb(0.678, 0.847, 0.902), "支持中文输入！\n\n✨ 也支持表情符号！", 0.015),
-                        (Color::srgb(0.596, 0.984, 0.596), "待办事项:\n• 构建优秀的应用\n• 学习 Bevy\n• 享受编程乐趣!", -0.01),
-                        (Color::srgb(1.0, 0.753, 0.796), "重要提醒:\n\n记得保存你的工作！", 0.025),
+                        (
+                            Color::srgb(1.0, 0.925, 0.675),
+                            "在这里写下你的想法...\n\n这是一个便笺纸！",
+                            -0.02,
+                        ),
+                        (
+                            Color::srgb(0.678, 0.847, 0.902),
+                            "支持中文输入！\n\n✨ 也支持表情符号！",
+                            0.015,
+                        ),
+                        (
+                            Color::srgb(0.596, 0.984, 0.596),
+                            "待办事项:\n• 构建优秀的应用\n• 学习 Bevy\n• 享受编程乐趣!",
+                            -0.01,
+                        ),
+                        (
+                            Color::srgb(1.0, 0.753, 0.796),
+                            "重要提醒:\n\n记得保存你的工作！",
+                            0.025,
+                        ),
                     ];
 
                     // Create each sticky note
@@ -140,38 +165,46 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut input_focus
                                     ))
                                     .with_children(|content_parent| {
                                         // Text input area
-                                        let input_entity = content_parent.spawn((
-                                            TextInputNode::default(),
-                                            TextInputBuffer::default(),
-                                            TextInputStyle {
-                                                cursor_color: Color::srgb(0.2, 0.2, 0.2),
-                                                selection_color: Color::srgba(0.3, 0.5, 0.8, 0.3),
-                                                selected_text_color: None,
-                                                ..default()
-                                            },
-                                            TextInputPrompt { text: "写点什么...".into(), color: Some(Color::srgb(0.35, 0.35, 0.35)), font: None },
-                                            Node {
-                                                width: Val::Percent(100.0),
-                                                height: Val::Percent(100.0),
-                                                ..default()
-                                            },
-                                            TextFont {
-                                                font: asset_server.load("fonts/Songti.ttc"),
-                                                font_size: 16.0,
-                                                ..default()
-                                            },
-                                            TextColor(Color::srgb(0.1, 0.1, 0.1)),
-                                            BackgroundColor(Color::NONE),
-                                            // 添加 UI 交互组件
-                                            Interaction::default(),
-                                            FocusPolicy::Block,
-                                        )).id();
+                                        let input_entity = content_parent
+                                            .spawn((
+                                                TextInputNode::default(),
+                                                TextInputBuffer::default(),
+                                                TextInputStyle {
+                                                    cursor_color: Color::srgb(0.2, 0.2, 0.2),
+                                                    selection_color: Color::srgba(
+                                                        0.3, 0.5, 0.8, 0.3,
+                                                    ),
+                                                    selected_text_color: None,
+                                                    ..default()
+                                                },
+                                                TextInputPrompt {
+                                                    text: "写点什么...".into(),
+                                                    color: Some(Color::srgb(0.35, 0.35, 0.35)),
+                                                    font: None,
+                                                },
+                                                Node {
+                                                    width: Val::Percent(100.0),
+                                                    height: Val::Percent(100.0),
+                                                    ..default()
+                                                },
+                                                TextFont {
+                                                    font: asset_server.load("fonts/Songti.ttc"),
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.1, 0.1, 0.1)),
+                                                BackgroundColor(Color::NONE),
+                                                // 添加 UI 交互组件
+                                                Interaction::default(),
+                                                FocusPolicy::Block,
+                                            ))
+                                            .id();
 
                                         // 保存第一个文本输入实体
                                         if first_input_entity.is_none() {
                                             first_input_entity = Some(input_entity);
                                         }
-                                        
+
                                         // Small decorative element (like a pin)
                                         content_parent
                                             .spawn((
@@ -216,9 +249,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut input_focus
         });
 }
 
-fn handle_submit(mut events: EventReader<TextSubmitEvent>) {
+fn handle_submit(mut events: MessageReader<SubmitText>) {
     for event in events.read() {
-        println!("Submitted text from entity {:?}: {}", event.entity, event.text);
+        println!(
+            "Submitted text from entity {:?}: {}",
+            event.entity, event.text
+        );
     }
 }
 

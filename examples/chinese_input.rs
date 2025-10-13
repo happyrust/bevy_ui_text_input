@@ -1,8 +1,9 @@
 //! Example demonstrating built-in Chinese IME input support
 
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputStyle, TextSubmitEvent,
+    SubmitText, TextInputBuffer, TextInputNode, TextInputPlugin, TextInputStyle,
 };
 
 fn main() {
@@ -15,7 +16,7 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    
+
     // Title and instructions
     commands.spawn((
         Text::new("中文输入测试 - Chinese Input Test\n\nThe library now has built-in IME support!\nJust click on the input field and start typing Chinese."),
@@ -32,7 +33,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // Chinese text input with Songti font
     commands.spawn((
         TextInputNode {
@@ -66,7 +67,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // Multi-line input for longer Chinese text
     commands.spawn((
         TextInputNode {
@@ -95,10 +96,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         BorderRadius::all(Val::Px(5.0)),
         TextInputStyle::default(),
     ));
-    
+
     // Example text
     commands.spawn((
-        Text::new("Example Chinese text:\n你好世界！\n欢迎使用Bevy文本输入插件。\n现在支持中文输入了！🎉"),
+        Text::new(
+            "Example Chinese text:\n你好世界！\n欢迎使用Bevy文本输入插件。\n现在支持中文输入了！🎉",
+        ),
         TextFont {
             font: asset_server.load("fonts/Songti.ttc"),
             font_size: 18.0,
@@ -112,7 +115,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         },
     ));
-    
+
     // Submit info
     commands.spawn((
         Text::new("Press Enter to submit (see console for output)"),
@@ -130,7 +133,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     ));
 }
 
-fn handle_submit(mut events: EventReader<TextSubmitEvent>) {
+fn handle_submit(mut events: MessageReader<SubmitText>) {
     for event in events.read() {
         info!("✅ Submitted text: '{}'", event.text);
         info!("   Entity: {:?}", event.entity);

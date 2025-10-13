@@ -14,7 +14,6 @@ use crate::text_input_pipeline::TextInputPipeline;
 use bevy::ecs::change_detection::DetectChanges;
 use bevy::ecs::component::Component;
 use bevy::ecs::entity::Entity;
-use bevy::ecs::event::EventReader;
 use bevy::ecs::message::MessageReader;
 use bevy::ecs::message::MessageWriter;
 use bevy::ecs::observer::On;
@@ -651,7 +650,7 @@ pub fn on_focused_keyboard_input(
 }
 
 pub fn listen_ime_events(
-    mut ime_events: EventReader<Ime>,
+    mut ime_events: MessageReader<Ime>,
     mut text_inputs: Query<&mut TextInputQueue, With<TextInputNode>>,
     mut global_state: ResMut<TextInputGlobalState>,
     input_focus: Res<InputFocus>,

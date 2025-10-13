@@ -1,26 +1,29 @@
 //! Debug IME commit not showing issue
 use bevy::prelude::*;
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue,
-    TextInputStyle, actions::TextInputAction, actions::TextInputEdit,
+    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue, TextInputStyle,
+    actions::TextInputAction, actions::TextInputEdit,
 };
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, TextInputPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (
-            debug_ime_events,
-            debug_input_focus,
-            debug_queue_processing,
-            debug_buffer_contents,
-        ))
+        .add_systems(
+            Update,
+            (
+                debug_ime_events,
+                debug_input_focus,
+                debug_queue_processing,
+                debug_buffer_contents,
+            ),
+        )
         .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    
+
     // Text input with marker component
     commands.spawn((
         TextInputNode::default(),
@@ -46,7 +49,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         TextInputStyle::default(),
         DebugMarker,
     ));
-    
+
     commands.spawn((
         Text::new("Click the input field and type Chinese characters"),
         TextFont {
@@ -65,9 +68,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 #[derive(Component)]
 struct DebugMarker;
 
-fn debug_ime_events(
-    mut ime_events: EventReader<bevy::window::Ime>,
-) {
+fn debug_ime_events(mut ime_events: EventReader<bevy::window::Ime>) {
     for event in ime_events.read() {
         match event {
             bevy::window::Ime::Preedit { value, cursor, .. } => {
@@ -113,7 +114,11 @@ fn debug_queue_processing(
 ) {
     for (queue, entity) in query.iter() {
         if !queue.actions.is_empty() {
-            info!("📝 Queue for {:?} has {} actions pending", entity, queue.actions.len());
+            info!(
+                "📝 Queue for {:?} has {} actions pending",
+                entity,
+                queue.actions.len()
+            );
             for (i, action) in queue.actions.iter().enumerate() {
                 info!("    Action {}: {:?}", i, action);
             }
@@ -128,7 +133,11 @@ fn debug_buffer_contents(
         let text = buffer.get_text();
         if !text.is_empty() {
             info!("📄 Buffer updated: '{}'", text);
-            info!("  -> Length: {} chars, {} bytes", text.chars().count(), text.len());
+            info!(
+                "  -> Length: {} chars, {} bytes",
+                text.chars().count(),
+                text.len()
+            );
         }
     }
 }

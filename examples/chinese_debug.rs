@@ -1,23 +1,31 @@
 //! 中文输入调试测试示例
 //! Chinese Input Debug Test Example
 
+use bevy::ecs::message::MessageReader;
 use bevy::{
     color::palettes::css::{DARK_BLUE, LIGHT_BLUE, NAVY, WHITE, YELLOW},
+    input_focus::InputFocus,
     prelude::*,
     window::Ime,
     winit::WinitWindows,
-    input_focus::InputFocus,
 };
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputPrompt,
-    TextInputStyle, TextSubmitEvent,
+    SubmitText, TextInputBuffer, TextInputNode, TextInputPlugin, TextInputPrompt, TextInputStyle,
 };
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, TextInputPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (submit_system, debug_ime_system, debug_text_buffer, debug_focus_system))
+        .add_systems(
+            Update,
+            (
+                submit_system,
+                debug_ime_system,
+                debug_text_buffer,
+                debug_focus_system,
+            ),
+        )
         .run();
 }
 
@@ -118,9 +126,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 struct DebugTextInput;
 
 // 调试IME事件
-fn debug_ime_system(
-    mut ime_events: EventReader<Ime>,
-) {
+fn debug_ime_system(mut ime_events: EventReader<Ime>) {
     for event in ime_events.read() {
         match event {
             Ime::Preedit { value, cursor, .. } => {
@@ -164,7 +170,7 @@ fn debug_focus_system(
 ) {
     if focus.is_changed() {
         info!("🎯 Focus changed: {:?}", focus.get());
-        
+
         // Manually enable IME if focus changed to a text input
         if !*manual_ime_enabled {
             if let Some(winit_windows) = winit_windows {
@@ -181,9 +187,7 @@ fn debug_focus_system(
     }
 }
 
-fn submit_system(
-    mut events: EventReader<TextSubmitEvent>,
-) {
+fn submit_system(mut events: MessageReader<SubmitText>) {
     for event in events.read() {
         info!("🚀 Text submitted: '{}'", event.text);
     }

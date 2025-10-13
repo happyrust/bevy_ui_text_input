@@ -1,13 +1,57 @@
 //! Debug IME commit issues
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
-use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue,
-    TextInputStyle, actions::TextInputAction, actions::TextInputEdit,
+use bevy::render::{
+    RenderPlugin,
+    settings::{Backends, RenderCreation, WgpuSettings},
 };
+use bevy_ui_text_input::{
+    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue, TextInputStyle,
+    actions::TextInputAction, actions::TextInputEdit,
+};
+use std::panic::{self, AssertUnwindSafe};
 
 fn main() {
+    let previous_hook = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+
+    if let Err(err) = panic::catch_unwind(AssertUnwindSafe(run_app)) {
+        panic::set_hook(previous_hook);
+        eprintln!(
+            "Failed to start `ime_debug` example: {}",
+            display_panic(err)
+        );
+        eprintln!(
+            "Tip: run on a machine with GPU access or point WGPU to a software adapter via `WGPU_ADAPTER_NAME`."
+        );
+    } else {
+        panic::set_hook(previous_hook);
+    }
+}
+
+fn display_panic(err: Box<dyn std::any::Any + Send>) -> String {
+    match err.downcast::<String>() {
+        Ok(message) => *message,
+        Err(err) => match err.downcast::<&'static str>() {
+            Ok(message) => (*message).to_string(),
+            Err(_) => "unknown panic".to_string(),
+        },
+    }
+}
+
+fn run_app() {
     App::new()
-        .add_plugins((DefaultPlugins, TextInputPlugin))
+        .add_plugins((
+            DefaultPlugins.set(RenderPlugin {
+                render_creation: RenderCreation::Automatic(WgpuSettings {
+                    force_fallback_adapter: true,
+                    backends: Some(Backends::PRIMARY | Backends::GL),
+                    ..default()
+                }),
+                ..default()
+            }),
+            TextInputPlugin,
+        ))
         .add_systems(Startup, setup)
         .add_systems(Update, (ime_debug_system, debug_queue))
         .run();
@@ -58,7 +102,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 }
 
 fn ime_debug_system(
-    mut ime_events: EventReader<bevy::window::Ime>,
+    mut ime_events: MessageReader<bevy::window::Ime>,
     mut text_inputs: Query<&mut TextInputQueue>,
     input_focus: Res<bevy::input_focus::InputFocus>,
 ) {
@@ -96,12 +140,14 @@ fn ime_debug_system(
     }
 }
 
-fn debug_queue(
-    query: Query<(Entity, &TextInputQueue, &TextInputBuffer), Changed<TextInputQueue>>,
-) {
+fn debug_queue(query: Query<(Entity, &TextInputQueue, &TextInputBuffer), Changed<TextInputQueue>>) {
     for (entity, queue, buffer) in query.iter() {
         if !queue.actions.is_empty() {
-            info!("📝 Queue for {:?} has {} actions", entity, queue.actions.len());
+            info!(
+                "📝 Queue for {:?} has {} actions",
+                entity,
+                queue.actions.len()
+            );
         }
         let text = buffer.get_text();
         if !text.is_empty() {

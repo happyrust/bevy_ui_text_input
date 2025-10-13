@@ -1,8 +1,8 @@
 //! Test if IME events need global handling
 use bevy::prelude::*;
 use bevy_ui_text_input::{
-    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue,
-    TextInputStyle, actions::TextInputAction, actions::TextInputEdit,
+    TextInputBuffer, TextInputNode, TextInputPlugin, TextInputQueue, TextInputStyle,
+    actions::TextInputAction, actions::TextInputEdit,
 };
 
 fn main() {
@@ -15,7 +15,7 @@ fn main() {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    
+
     commands.spawn((
         TextInputNode::default(),
         TextInputBuffer::default(),
@@ -39,7 +39,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         BorderColor(Color::WHITE),
         TextInputStyle::default(),
     ));
-    
+
     info!("Test started - try typing Chinese");
 }
 
@@ -53,7 +53,7 @@ fn global_ime_handler(
         match event {
             bevy::window::Ime::Commit { value, .. } => {
                 info!("✅ Global handler: IME Commit '{}'", value);
-                
+
                 // Try to insert text manually
                 if let Some(focused) = input_focus.get() {
                     if let Ok(mut queue) = text_inputs.get_mut(focused) {

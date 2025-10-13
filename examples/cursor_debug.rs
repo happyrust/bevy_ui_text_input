@@ -1,8 +1,8 @@
 //! Debug cursor visibility
 
+use bevy::input_focus::InputFocus;
 use bevy::{color::palettes::css::NAVY, prelude::*};
 use bevy_ui_text_input::{TextInputNode, TextInputPlugin};
-use bevy::input_focus::InputFocus;
 
 fn main() {
     App::new()

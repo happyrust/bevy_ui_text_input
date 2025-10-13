@@ -5,16 +5,14 @@ use bevy::{prelude::*, window::WindowPlugin, winit::WinitWindows};
 
 fn main() {
     App::new()
-        .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "IME Test Window".to_string(),
-                    // Try explicit IME properties if available
-                    ..default()
-                }),
+        .add_plugins((DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "IME Test Window".to_string(),
+                // Try explicit IME properties if available
                 ..default()
             }),
-        ))
+            ..default()
+        }),))
         .add_systems(Startup, setup)
         .add_systems(Update, (ime_system, explicit_ime_enable))
         .run();
@@ -22,7 +20,7 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn(Camera2d);
-    
+
     commands.spawn((
         Text::new("IME Window Test - Try typing Chinese characters"),
         TextFont {
@@ -37,7 +35,7 @@ fn setup(mut commands: Commands) {
             ..default()
         },
     ));
-    
+
     info!("🔍 IME Window Test started");
 }
 
@@ -49,11 +47,11 @@ fn explicit_ime_enable(
     if *enabled {
         return;
     }
-    
+
     let Some(winit_windows) = winit_windows else {
         return;
     };
-    
+
     for window_entity in windows.iter() {
         if let Some(winit_window) = winit_windows.get_window(window_entity) {
             info!("🔧 Manually enabling IME on window");
@@ -63,9 +61,7 @@ fn explicit_ime_enable(
     }
 }
 
-fn ime_system(
-    mut ime_events: EventReader<bevy::window::Ime>,
-) {
+fn ime_system(mut ime_events: EventReader<bevy::window::Ime>) {
     for event in ime_events.read() {
         match event {
             bevy::window::Ime::Preedit { value, cursor, .. } => {
