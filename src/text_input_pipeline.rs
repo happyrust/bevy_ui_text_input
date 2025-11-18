@@ -32,7 +32,7 @@ use bevy::text::GlyphAtlasInfo;
 use bevy::text::TextBounds;
 use bevy::text::TextError;
 use bevy::text::TextFont;
-use bevy::text::{LineBreak, LineHeight};
+use bevy::text::LineBreak;
 use bevy::ui::ComputedNode;
 use cosmic_text;
 use cosmic_text::Buffer;
@@ -267,10 +267,8 @@ pub fn text_input_system(
                 height: Some(node.size().y),
             };
 
-            let line_height = match text_font.line_height {
-                LineHeight::Px(h) => h,
-                LineHeight::RelativeToFont(r) => r * text_font.font_size,
-            };
+            // 使用默认行高 1.2 倍字体大小
+            let line_height = 1.2 * text_font.font_size;
 
             let result = editor.editor.with_buffer_mut(|buffer| {
                 let TextInputPipeline {
@@ -505,10 +503,8 @@ pub fn text_input_prompt_system(
 
             let font = prompt.font.as_ref().unwrap_or(text_font.as_ref());
 
-            let line_height = match text_font.line_height {
-                LineHeight::Px(h) => h,
-                LineHeight::RelativeToFont(r) => r * font.font_size,
-            };
+            // 使用默认行高 1.2 倍字体大小
+            let line_height = 1.2 * font.font_size;
 
             let metrics = Metrics::new(font.font_size, line_height)
                 .scale(node.inverse_scale_factor().recip());
